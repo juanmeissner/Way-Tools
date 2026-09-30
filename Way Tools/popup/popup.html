@@ -27,6 +27,36 @@
         </div>
       </section>
 
+      <section class="notification-settings" aria-labelledby="notification-settings-title">
+        <div class="notification-settings-copy">
+          <strong id="notification-settings-title">Notificações do ChatWoot</strong>
+          <p id="notification-duration-description">Remover completamente a notificação após 5 segundos.</p>
+        </div>
+        <label for="notification-duration">Duração</label>
+        <select id="notification-duration">
+          <option value="disabled">Desativadas</option>
+          <option value="windows">Padrão do Windows</option>
+          <option value="1">1 segundo</option>
+          <option value="2">2 segundos</option>
+          <option value="5">5 segundos</option>
+          <option value="10">10 segundos</option>
+          <option value="30">30 segundos</option>
+          <option value="60">1 minuto</option>
+          <option value="persistent">Até clicar ou fechar</option>
+        </select>
+        <div class="notification-foreground-setting">
+          <div>
+            <strong>Notificar com o ChatWoot em primeiro plano</strong>
+            <p id="notification-when-focused-description">Desativado: avisa somente quando o ChatWoot estiver em outra aba ou minimizado.</p>
+          </div>
+          <label class="switch" title="Permitir notificações enquanto o ChatWoot estiver visível e em foco">
+            <input id="notification-when-focused" type="checkbox" aria-label="Notificar com o ChatWoot em primeiro plano" />
+            <span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
+        <p id="notification-settings-status" class="notification-settings-status" role="status" aria-live="polite"></p>
+      </section>
+
       <div class="section-heading">
         <span>Scripts instalados</span>
         <span id="script-count">1</span>
@@ -38,7 +68,7 @@
         <summary>Dicionário pessoal</summary>
         <div class="dictionary-content">
           <p class="dictionary-intro">
-            Cadastre correções e palavras que nunca devem ser alteradas. Os dados ficam somente neste navegador.
+            Cadastre correções e palavras que nunca devem ser alteradas. As mudanças são aplicadas imediatamente e ficam somente neste navegador.
           </p>
 
           <form id="correction-form" class="dictionary-form">

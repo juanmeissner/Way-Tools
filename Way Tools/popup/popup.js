@@ -20,9 +20,29 @@
   const ignoredWord = document.querySelector("#ignored-word");
   const ignoredList = document.querySelector("#ignored-list");
   const dictionaryStatus = document.querySelector("#dictionary-status");
+  const notificationDuration = document.querySelector("#notification-duration");
+  const notificationDurationDescription = document.querySelector("#notification-duration-description");
+  const notificationWhenFocused = document.querySelector("#notification-when-focused");
+  const notificationWhenFocusedDescription = document.querySelector("#notification-when-focused-description");
+  const notificationSettingsStatus = document.querySelector("#notification-settings-status");
 
   const personalDictionaryStorageKey =
     "wayTools.data.way-corretor-ortografico-pro.way-corretor-dicionario-pessoal-v1";
+  const notificationDurationStorageKey = "wayTools.notifications.duration";
+  const notificationDurationDefault = "5";
+  const notificationWhenFocusedStorageKey = "wayTools.notifications.whenFocused";
+  const notificationWhenFocusedDefault = false;
+  const notificationDurationDescriptions = Object.freeze({
+    disabled: "Não exibir notificações de novas mensagens.",
+    windows: "Usar o tempo definido pelo Windows e manter o aviso na Central de Notificações.",
+    "1": "Remover completamente a notificação após 1 segundo.",
+    "2": "Remover completamente a notificação após 2 segundos.",
+    "5": "Remover completamente a notificação após 5 segundos.",
+    "10": "Remover completamente a notificação após 10 segundos.",
+    "30": "Remover completamente a notificação após aproximadamente 30 segundos.",
+    "60": "Remover completamente a notificação após aproximadamente 1 minuto.",
+    persistent: "Manter a notificação até você clicar nela ou fechá-la."
+  });
   const maxPersonalEntries = 200;
 
   let activeTabId = null;
@@ -36,6 +56,41 @@
 
   function enabledKey(scriptId) {
     return `wayTools.scripts.${scriptId}.enabled`;
+  }
+
+  function normalizeNotificationDuration(value) {
+    return Object.prototype.hasOwnProperty.call(notificationDurationDescriptions, value)
+      ? value
+      : notificationDurationDefault;
+  }
+
+  function updateNotificationDurationDescription(value) {
+    notificationDurationDescription.textContent =
+      notificationDurationDescriptions[normalizeNotificationDuration(value)];
+  }
+
+  async function loadNotificationDuration() {
+    const stored = await chrome.storage.local.get({
+      [notificationDurationStorageKey]: notificationDurationDefault
+    });
+    const value = normalizeNotificationDuration(stored[notificationDurationStorageKey]);
+    notificationDuration.value = value;
+    updateNotificationDurationDescription(value);
+  }
+
+  function updateNotificationWhenFocusedDescription(enabled) {
+    notificationWhenFocusedDescription.textContent = enabled
+      ? "Ativado: também avisa enquanto o ChatWoot estiver visível e em foco."
+      : "Desativado: avisa somente quando o ChatWoot estiver em outra aba ou minimizado.";
+  }
+
+  async function loadNotificationWhenFocused() {
+    const stored = await chrome.storage.local.get({
+      [notificationWhenFocusedStorageKey]: notificationWhenFocusedDefault
+    });
+    const enabled = stored[notificationWhenFocusedStorageKey] === true;
+    notificationWhenFocused.checked = enabled;
+    updateNotificationWhenFocusedDescription(enabled);
   }
 
   function wildcardMatches(pattern, url) {
@@ -186,7 +241,7 @@
             `Remover correção de ${source}`,
             async () => {
               delete personalDictionary.corrections[source];
-              await savePersonalDictionary("Correção removida. Recarregue a página do sistema.");
+              await savePersonalDictionary("Correção removida e aplicada às páginas abertas.");
             }
           )
         )
@@ -206,7 +261,7 @@
             `Remover exceção ${word}`,
             async () => {
               personalDictionary.ignored = personalDictionary.ignored.filter((item) => item !== word);
-              await savePersonalDictionary("Exceção removida. Recarregue a página do sistema.");
+              await savePersonalDictionary("Exceção removida e aplicada às páginas abertas.");
             }
           )
         )
@@ -342,7 +397,7 @@
     personalDictionary.corrections[source] = target;
     personalDictionary.ignored = personalDictionary.ignored.filter((item) => item !== source);
     correctionForm.reset();
-    await savePersonalDictionary("Correção salva. Recarregue a página do sistema.");
+    await savePersonalDictionary("Correção salva e aplicada às páginas abertas.");
   });
 
   ignoredForm.addEventListener("submit", async (event) => {
@@ -362,11 +417,53 @@
     delete personalDictionary.corrections[word];
     personalDictionary.ignored = [...new Set([...personalDictionary.ignored, word])];
     ignoredForm.reset();
-    await savePersonalDictionary("Exceção salva. Recarregue a página do sistema.");
+    await savePersonalDictionary("Exceção salva e aplicada às páginas abertas.");
+  });
+
+  notificationDuration.addEventListener("change", async () => {
+    const value = normalizeNotificationDuration(notificationDuration.value);
+    notificationDuration.disabled = true;
+
+    try {
+      await chrome.storage.local.set({ [notificationDurationStorageKey]: value });
+      updateNotificationDurationDescription(value);
+      notificationSettingsStatus.textContent = "Configuração salva. As próximas notificações já usarão esta duração.";
+    } catch (error) {
+      console.error("[Way Tools] Falha ao salvar duração das notificações:", error);
+      notificationSettingsStatus.textContent = "Não foi possível salvar a configuração.";
+    } finally {
+      notificationDuration.disabled = false;
+    }
+  });
+
+  notificationWhenFocused.addEventListener("change", async () => {
+    const enabled = notificationWhenFocused.checked;
+    notificationWhenFocused.disabled = true;
+
+    try {
+      await chrome.storage.local.set({ [notificationWhenFocusedStorageKey]: enabled });
+      updateNotificationWhenFocusedDescription(enabled);
+      notificationSettingsStatus.textContent = enabled
+        ? "Configuração salva. O ChatWoot também poderá avisar quando estiver em primeiro plano."
+        : "Configuração salva. Os avisos aparecerão somente em outra aba ou com a janela minimizada.";
+    } catch (error) {
+      console.error("[Way Tools] Falha ao salvar preferência de primeiro plano:", error);
+      notificationWhenFocused.checked = !enabled;
+      updateNotificationWhenFocusedDescription(!enabled);
+      notificationSettingsStatus.textContent = "Não foi possível salvar a configuração.";
+    } finally {
+      notificationWhenFocused.disabled = false;
+    }
   });
 
   async function initialize() {
-    await Promise.all([renderScripts(), inspectActiveTab(), loadPersonalDictionary()]);
+    await Promise.all([
+      renderScripts(),
+      inspectActiveTab(),
+      loadPersonalDictionary(),
+      loadNotificationDuration(),
+      loadNotificationWhenFocused()
+    ]);
     await renderPageCommands();
   }
 

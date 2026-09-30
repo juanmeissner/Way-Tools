@@ -1,5 +1,5 @@
 /*
- * Way Tools - Mensagens Personalizadas v3.4
+ * Way Tools - Mensagens Personalizadas v3.5
  * Adaptado do userscript fornecido para o runtime nativo da extensão.
  */
 
@@ -11,8 +11,8 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
 // ==UserScript==
 // @name         Way - Mensagens Personalizadas
 // @namespace    way-mensagens-personalizadas
-// @version      3.4
-// @description  Mensagens personalizadas com dados do cliente, tags globais, autocomplete, visita técnica, alertas de inatividade na área de exibição e backup JSON
+// @version      3.5
+// @description  Mensagens personalizadas com dados do cliente, tags globais, autocomplete, visita técnica, alertas de inatividade, notificações de novas mensagens e backup JSON
 // @match        https://ia-nocodb.internetway.com.br/*
 // @run-at       document-start
 // @grant        GM_getValue
@@ -51,8 +51,70 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
         ativo: true,
         amarelo: 2,
         laranja: 5,
-        vermelho: 10
+        vermelho: 10,
+        notificarAmarelo: false,
+        notificarLaranja: false,
+        notificarVermelho: false
     };
+
+
+    const POLITICA_NOTIFICACOES =
+        globalThis.WayToolsMessageNotificationPolicy;
+
+
+    const ESTADO_NOTIFICACOES = {
+        inicioAquecimento: 0,
+        duracaoAquecimento: 5000,
+        conversas: new Map(),
+        idsElementos: new WeakMap(),
+        proximoIdElemento: 1
+    };
+
+
+    const CHAVE_NOTIFICAR_EM_PRIMEIRO_PLANO =
+        'wayTools.notifications.whenFocused';
+
+
+    const PREFERENCIAS_NOTIFICACOES = {
+        notificarEmPrimeiroPlano: false
+    };
+
+
+    const ESTADO_TITULO_NAO_LIDAS = {
+        tituloBase: '',
+        ultimoTituloAplicado: ''
+    };
+
+
+    const ESTADO_NOTIFICACOES_INATIVIDADE = {
+        inicioAquecimento: 0,
+        duracaoAquecimento: 5000,
+        conversas: new Map()
+    };
+
+
+    const NIVEIS_NOTIFICACAO_INATIVIDADE = Object.freeze({
+        yellow: {
+            ordem: 1,
+            configuracao: 'notificarAmarelo',
+            rotulo: 'Atenção',
+            icone: '🟡'
+        },
+
+        orange: {
+            ordem: 2,
+            configuracao: 'notificarLaranja',
+            rotulo: 'Atenção elevada',
+            icone: '🟠'
+        },
+
+        red: {
+            ordem: 3,
+            configuracao: 'notificarVermelho',
+            rotulo: 'Crítico',
+            icone: '🔴'
+        }
+    });
 
 
     /* =========================================================
@@ -501,6 +563,18 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             ativo:
                 origem.ativo !==
                 false,
+
+            notificarAmarelo:
+                origem.notificarAmarelo ===
+                true,
+
+            notificarLaranja:
+                origem.notificarLaranja ===
+                true,
+
+            notificarVermelho:
+                origem.notificarVermelho ===
+                true,
 
             amarelo:
                 Number.isInteger(
@@ -957,8 +1031,14 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 tempoTotalMinutos:
                     tempoTotal,
 
+                tempoTotalTexto:
+                    partes[0],
+
                 ultimaAtividadeMinutos:
-                    ultimaAtividade
+                    ultimaAtividade,
+
+                ultimaAtividadeTexto:
+                    partes[1]
             };
         }
 
@@ -1057,13 +1137,1199 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 tempoTotalMinutos:
                     tempoTotal,
 
+                tempoTotalTexto:
+                    partes[0],
+
                 ultimaAtividadeMinutos:
-                    ultimaAtividade
+                    ultimaAtividade,
+
+                ultimaAtividadeTexto:
+                    partes[1]
             };
         }
 
 
         return null;
+    }
+
+
+    /* =========================================================
+       NOTIFICAÇÕES DE NOVAS MENSAGENS
+       ========================================================= */
+
+    function localizarLinkConversa(
+        card
+    ) {
+        return card?.closest?.(
+            'a[href*="/conversation/"]'
+        ) ||
+            card?.querySelector?.(
+                'a[href*="/conversation/"]'
+            ) ||
+            null;
+    }
+
+
+    function obterUrlConversa(
+        card
+    ) {
+        const link =
+            localizarLinkConversa(
+                card
+            );
+
+
+        const href =
+            link?.getAttribute?.(
+                'href'
+            );
+
+
+        if (
+            href
+        ) {
+            try {
+                return new URL(
+                    href,
+                    window.location.href
+                ).href;
+
+            } catch (erro) {
+            }
+        }
+
+
+        return window.location.href;
+    }
+
+
+    function extrairNomeClienteCardConversa(
+        card
+    ) {
+        const seletores = [
+            '.conversation--user',
+            '[data-testid="conversation-contact-name"]',
+            '[class*="conversation-user"]',
+            'h4'
+        ];
+
+
+        for (
+            const seletor
+            of seletores
+        ) {
+            const elemento =
+                card.querySelector(
+                    seletor
+                );
+
+
+            const texto =
+                normalizarEspacos(
+                    elemento?.textContent
+                );
+
+
+            if (
+                texto
+            ) {
+                return texto;
+            }
+        }
+
+
+        return normalizarEspacos(
+            card.querySelector(
+                'img[alt]'
+            )?.getAttribute(
+                'alt'
+            )
+        );
+    }
+
+
+    function extrairPreviaMensagemCard(
+        card,
+        dadosTempo,
+        nomeCliente
+    ) {
+        const seletores = [
+            '[data-testid="conversation-message-preview"]',
+            '.conversation--message-preview',
+            '.conversation-message-preview',
+            '.conversation--message',
+            'div.overflow-hidden.text-ellipsis.whitespace-nowrap',
+            'p.overflow-hidden.text-ellipsis.whitespace-nowrap'
+        ];
+
+
+        const candidatos = [];
+
+
+        seletores.forEach(
+            seletor => {
+                card
+                    .querySelectorAll(
+                        seletor
+                    )
+                    .forEach(
+                        elemento =>
+                            candidatos.push(
+                                elemento
+                            )
+                    );
+            }
+        );
+
+
+        card
+            .querySelectorAll(
+                'p'
+            )
+            .forEach(
+                elemento =>
+                    candidatos.push(
+                        elemento
+                    )
+            );
+
+
+        const ignorados =
+            new Set(
+                [
+                    normalizarEspacos(
+                        nomeCliente
+                    ),
+                    normalizarEspacos(
+                        dadosTempo?.texto
+                    )
+                ]
+                    .filter(
+                        Boolean
+                    )
+            );
+
+
+        for (
+            const elemento
+            of candidatos
+        ) {
+            if (
+                elemento.matches?.(
+                    '.conversation--user'
+                ) ||
+                elemento.contains?.(
+                    dadosTempo?.elemento
+                )
+            ) {
+                continue;
+            }
+
+
+            const texto =
+                normalizarEspacos(
+                    elemento.textContent
+                );
+
+
+            if (
+                texto &&
+                !ignorados.has(
+                    texto
+                ) &&
+                !texto.includes(
+                    '•'
+                )
+            ) {
+                return texto;
+            }
+        }
+
+
+        return '';
+    }
+
+
+    function obterQuantidadeNaoLidasCard(
+        card
+    ) {
+        const elemento =
+            card.querySelector(
+                [
+                    '[data-testid="unread-badge"]',
+                    '[aria-label*="não lida" i]',
+                    '[aria-label*="unread" i]',
+                    '.bg-n-teal-9.rounded-full.h-4'
+                ].join(',')
+            );
+
+
+        const resultado =
+            normalizarEspacos(
+                elemento?.textContent
+            )
+                .match(
+                    /\d+/
+                );
+
+
+        return resultado
+            ?
+            Number(
+                resultado[0]
+            )
+            :
+            0;
+    }
+
+
+    function obterRotuloDiretoElemento(
+        elemento
+    ) {
+        return normalizarEspacos(
+            Array.from(
+                elemento?.childNodes ||
+                []
+            )
+                .filter(
+                    no =>
+                        no.nodeType ===
+                        3
+                )
+                .map(
+                    no =>
+                        no.textContent ||
+                        ''
+                )
+                .join(
+                    ' '
+                )
+        );
+    }
+
+
+    function localizarAbaConversas(
+        rotuloProcurado
+    ) {
+        const rotuloNormalizado =
+            normalizarEspacos(
+                rotuloProcurado
+            )
+                .toLocaleLowerCase(
+                    'pt-BR'
+                );
+
+
+        return Array.from(
+            document.querySelectorAll(
+                'a, button, [role="tab"]'
+            )
+        )
+            .find(
+                elemento => {
+                    if (
+                        obterRotuloDiretoElemento(
+                            elemento
+                        )
+                            .toLocaleLowerCase(
+                                'pt-BR'
+                            ) !==
+                            rotuloNormalizado
+                    ) {
+                        return false;
+                    }
+
+
+                    const lista =
+                        elemento.closest(
+                            'ul'
+                        );
+
+
+                    if (
+                        !lista
+                    ) {
+                        return false;
+                    }
+
+
+                    const rotulosIrmaos =
+                        Array.from(
+                            lista.querySelectorAll(
+                                'a, button, [role="tab"]'
+                            )
+                        )
+                            .map(
+                                obterRotuloDiretoElemento
+                            )
+                            .map(
+                                rotulo =>
+                                    rotulo.toLocaleLowerCase(
+                                        'pt-BR'
+                                    )
+                            );
+
+
+                    return rotulosIrmaos.includes(
+                        'minhas'
+                    ) &&
+                    rotulosIrmaos.includes(
+                        'todos'
+                    );
+                }
+            ) ||
+            null;
+    }
+
+
+    function abaConversasMinhasEstaAtiva() {
+        const abaMinhas =
+            localizarAbaConversas(
+                'Minhas'
+            );
+
+
+        if (
+            !abaMinhas
+        ) {
+            return false;
+        }
+
+
+        return (
+            abaMinhas.getAttribute(
+                'aria-selected'
+            ) ===
+                'true' ||
+            [
+                'page',
+                'true'
+            ].includes(
+                abaMinhas.getAttribute(
+                    'aria-current'
+                )
+            ) ||
+            abaMinhas.getAttribute(
+                'data-state'
+            ) ===
+                'active' ||
+            abaMinhas.classList.contains(
+                'after:bg-n-brand'
+            ) &&
+            abaMinhas.classList.contains(
+                'after:opacity-100'
+            )
+        );
+    }
+
+
+    function obterTituloBaseChatWoot() {
+        const tituloAtual =
+            String(
+                document.title || ''
+            );
+
+
+        const tituloSemContador =
+            tituloAtual
+                .replace(
+                    /^\(\d+\+?\)\s*/,
+                    ''
+                )
+                .trim();
+
+
+        /*
+         * O próprio ChatWoot pode mudar o título ao navegar.
+         * Quando isso acontecer, preservamos o novo título como base,
+         * removendo somente o contador aplicado pela extensão.
+         */
+
+        if (
+            tituloSemContador &&
+            tituloAtual !==
+                ESTADO_TITULO_NAO_LIDAS
+                    .ultimoTituloAplicado
+        ) {
+            ESTADO_TITULO_NAO_LIDAS
+                .tituloBase =
+                    tituloSemContador;
+        }
+
+
+        if (
+            !ESTADO_TITULO_NAO_LIDAS
+                .tituloBase
+        ) {
+            ESTADO_TITULO_NAO_LIDAS
+                .tituloBase =
+                    tituloSemContador ||
+                    'ChatWoot';
+        }
+
+
+        return ESTADO_TITULO_NAO_LIDAS
+            .tituloBase;
+    }
+
+
+    function atualizarTituloMensagensNaoLidas(
+        cards
+    ) {
+        const quantidadeTotal =
+            cards.reduce(
+                (
+                    total,
+                    card
+                ) =>
+                    total +
+                    obterQuantidadeNaoLidasCard(
+                        card
+                    ),
+                0
+            );
+
+
+        const tituloBase =
+            obterTituloBaseChatWoot();
+
+
+        const proximoTitulo =
+            quantidadeTotal > 0
+                ?
+                `(${quantidadeTotal}) ${tituloBase}`
+                :
+                tituloBase;
+
+
+        ESTADO_TITULO_NAO_LIDAS
+            .ultimoTituloAplicado =
+                proximoTitulo;
+
+
+        if (
+            document.title !==
+            proximoTitulo
+        ) {
+            document.title =
+                proximoTitulo;
+        }
+    }
+
+
+    function ultimaMensagemFoiDoAtendente(
+        card
+    ) {
+        const conversaAberta =
+            card.matches?.(
+                '.active, .selected, [aria-current="true"]'
+            );
+
+
+        if (conversaAberta) {
+            const paineis =
+                Array.from(
+                    document.querySelectorAll(
+                        '.conversation-panel'
+                    )
+                );
+
+
+            for (
+                let indicePainel =
+                    paineis.length - 1;
+                indicePainel >= 0;
+                indicePainel--
+            ) {
+                const painel =
+                    paineis[indicePainel];
+
+
+                if (
+                    painel.hidden ||
+                    painel.getAttribute(
+                        'aria-hidden'
+                    ) ===
+                        'true'
+                ) {
+                    continue;
+                }
+
+
+                const mensagens =
+                    Array.from(
+                        painel.querySelectorAll(
+                            '.message-bubble-container'
+                        )
+                    );
+
+
+                for (
+                    let indiceMensagem =
+                        mensagens.length - 1;
+                    indiceMensagem >= 0;
+                    indiceMensagem--
+                ) {
+                    const mensagem =
+                        mensagens[indiceMensagem];
+
+
+                    if (
+                        mensagem.querySelector(
+                            '[data-bubble-name="activity"]'
+                        ) ||
+                        mensagem.classList.contains(
+                            'justify-center'
+                        )
+                    ) {
+                        continue;
+                    }
+
+
+                    if (
+                        mensagem.querySelector(
+                            '.right-bubble'
+                        ) ||
+                        mensagem.classList.contains(
+                            'justify-end'
+                        )
+                    ) {
+                        return true;
+                    }
+
+
+                    if (
+                        mensagem.querySelector(
+                            '.left-bubble'
+                        ) ||
+                        mensagem.classList.contains(
+                            'justify-start'
+                        )
+                    ) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+
+        return Boolean(
+            card.matches?.(
+                [
+                    '.right-bubble',
+                    '.justify-end',
+                    '[data-message-direction="outgoing"]',
+                    '[data-outgoing="true"]',
+                    '[data-sender-type="agent" i]',
+                    '[data-sender-type="user" i]'
+                ].join(',')
+            ) ||
+            card.querySelector(
+                [
+                    '[icon="arrow-reply"]',
+                    '[data-icon="arrow-reply"]',
+                    '.icon-arrow-reply',
+                    '[class*="arrow-reply"]',
+                    '.right-bubble',
+                    '.justify-end',
+                    '[data-message-direction="outgoing"]',
+                    '[data-outgoing="true"]',
+                    '[data-sender-type="agent" i]',
+                    '[data-sender-type="user" i]'
+                ].join(',')
+            )
+        );
+    }
+
+
+    function paginaChatWootEstaEmUso() {
+        return document.visibilityState ===
+            'visible' &&
+            (
+                typeof document.hasFocus !==
+                    'function' ||
+                document.hasFocus()
+            );
+    }
+
+
+    function iniciarSincronizacaoPreferenciasNotificacoes() {
+        chrome.storage.local.get(
+            {
+                [CHAVE_NOTIFICAR_EM_PRIMEIRO_PLANO]:
+                    false
+            },
+
+            valores => {
+                if (
+                    chrome.runtime.lastError
+                ) {
+                    console.warn(
+                        '[Way Mensagens] Não foi possível carregar a preferência de notificações em primeiro plano:',
+                        chrome.runtime.lastError.message
+                    );
+
+                    return;
+                }
+
+
+                PREFERENCIAS_NOTIFICACOES
+                    .notificarEmPrimeiroPlano =
+                        valores[
+                            CHAVE_NOTIFICAR_EM_PRIMEIRO_PLANO
+                        ] === true;
+            }
+        );
+
+
+        chrome.storage.onChanged.addListener(
+            (
+                alteracoes,
+                area
+            ) => {
+                if (
+                    area !==
+                        'local' ||
+                    !Object.prototype.hasOwnProperty.call(
+                        alteracoes,
+                        CHAVE_NOTIFICAR_EM_PRIMEIRO_PLANO
+                    )
+                ) {
+                    return;
+                }
+
+
+                PREFERENCIAS_NOTIFICACOES
+                    .notificarEmPrimeiroPlano =
+                        alteracoes[
+                            CHAVE_NOTIFICAR_EM_PRIMEIRO_PLANO
+                        ].newValue === true;
+            }
+        );
+    }
+
+
+    function obterChaveConversaCard(
+        card,
+        nomeCliente
+    ) {
+        const link =
+            localizarLinkConversa(
+                card
+            );
+
+
+        const href =
+            link?.getAttribute?.(
+                'href'
+            ) ||
+            '';
+
+
+        const idHref =
+            href.match(
+                /\/conversation\/(\d+)/i
+            )?.[1];
+
+
+        if (
+            idHref
+        ) {
+            return `conversation:${idHref}`;
+        }
+
+
+        const atributos = [
+            'data-conversation-id',
+            'data-conversation',
+            'data-id'
+        ];
+
+
+        for (
+            const atributo
+            of atributos
+        ) {
+            const valor =
+                normalizarEspacos(
+                    card.getAttribute(
+                        atributo
+                    )
+                );
+
+
+            if (
+                valor
+            ) {
+                return `conversation:${valor}`;
+            }
+        }
+
+
+        const avatar =
+            card.querySelector(
+                'img'
+            );
+
+
+        const identificacaoContato =
+            [
+                normalizarEspacos(
+                    nomeCliente
+                ),
+                normalizarEspacos(
+                    avatar?.getAttribute(
+                        'src'
+                    )
+                ),
+                normalizarEspacos(
+                    avatar?.getAttribute(
+                        'alt'
+                    )
+                )
+            ]
+                .filter(
+                    Boolean
+                )
+                .join('|');
+
+
+        if (
+            identificacaoContato
+        ) {
+            return `contact:${identificacaoContato}`;
+        }
+
+
+        if (
+            !ESTADO_NOTIFICACOES
+                .idsElementos
+                .has(
+                    card
+                )
+        ) {
+            ESTADO_NOTIFICACOES
+                .idsElementos
+                .set(
+                    card,
+                    ESTADO_NOTIFICACOES
+                        .proximoIdElemento++
+                );
+        }
+
+
+        return `element:${ESTADO_NOTIFICACOES
+            .idsElementos
+            .get(
+                card
+            )}`;
+    }
+
+
+    function enviarNotificacaoNovaMensagem(
+        dados
+    ) {
+        try {
+            chrome.runtime.sendMessage(
+                {
+                    type:
+                        'wayTools:iaMessageNotification',
+
+                    conversationKey:
+                        dados.chave,
+
+                    fingerprint:
+                        dados.assinatura,
+
+                    customerName:
+                        dados.nomeCliente,
+
+                    preview:
+                        dados.previa,
+
+                    url:
+                        dados.url
+                },
+
+                resposta => {
+                    const erro =
+                        chrome.runtime.lastError;
+
+
+                    if (
+                        erro
+                    ) {
+                        console.warn(
+                            '[Way Mensagens] Não foi possível exibir a notificação:',
+                            erro.message
+                        );
+
+                        return;
+                    }
+
+
+                    if (
+                        resposta?.ok ===
+                        false
+                    ) {
+                        console.warn(
+                            '[Way Mensagens] Notificação recusada:',
+                            resposta.error
+                        );
+                    }
+                }
+            );
+
+        } catch (erro) {
+            console.warn(
+                '[Way Mensagens] Falha ao solicitar notificação:',
+                erro
+            );
+        }
+    }
+
+
+    function monitorarNotificacaoInatividade(
+        card,
+        dadosTempo,
+        nivel,
+        configuracao
+    ) {
+        const instante =
+            Date.now();
+
+
+        if (
+            !ESTADO_NOTIFICACOES_INATIVIDADE
+                .inicioAquecimento
+        ) {
+            ESTADO_NOTIFICACOES_INATIVIDADE
+                .inicioAquecimento =
+                    instante;
+        }
+
+
+        const nomeCliente =
+            extrairNomeClienteCardConversa(
+                card
+            );
+
+
+        const chave =
+            obterChaveConversaCard(
+                card,
+                nomeCliente
+            );
+
+
+        const estadoAnterior =
+            ESTADO_NOTIFICACOES_INATIVIDADE
+                .conversas
+                .get(
+                    chave
+                );
+
+
+        ESTADO_NOTIFICACOES_INATIVIDADE
+            .conversas
+            .set(
+                chave,
+                {
+                    nivel:
+                        nivel
+                }
+            );
+
+
+        const detalhesNivel =
+            NIVEIS_NOTIFICACAO_INATIVIDADE[
+                nivel
+            ];
+
+
+        if (
+            !detalhesNivel
+        ) {
+            return;
+        }
+
+
+        const primeiraObservacao =
+            !estadoAnterior;
+
+
+        const aquecendo =
+            primeiraObservacao &&
+            instante -
+                ESTADO_NOTIFICACOES_INATIVIDADE
+                    .inicioAquecimento <
+                ESTADO_NOTIFICACOES_INATIVIDADE
+                    .duracaoAquecimento;
+
+
+        if (
+            !POLITICA_NOTIFICACOES
+                ?.shouldNotifyInactivityTransition?.(
+                    estadoAnterior?.nivel ||
+                        'normal',
+                    nivel,
+                    {
+                        enabled:
+                            configuracao[
+                                detalhesNivel.configuracao
+                            ] === true,
+
+                        warmingUp:
+                            aquecendo
+                    }
+                )
+        ) {
+            return;
+        }
+
+
+        if (
+            !PREFERENCIAS_NOTIFICACOES
+                .notificarEmPrimeiroPlano &&
+            paginaChatWootEstaEmUso()
+        ) {
+            return;
+        }
+
+
+        const minutos =
+            dadosTempo
+                .ultimaAtividadeMinutos;
+
+
+        const unidade =
+            minutos === 1
+                ?
+                'minuto'
+                :
+                'minutos';
+
+
+        enviarNotificacaoNovaMensagem(
+            {
+                chave:
+                    chave,
+
+                assinatura:
+                    `${chave}|inatividade|${nivel}|${instante}`,
+
+                nomeCliente:
+                    nomeCliente ||
+                    'Cliente',
+
+                previa:
+                    `${detalhesNivel.icone} ${detalhesNivel.rotulo}: atendimento sem nova atividade há ${minutos} ${unidade}.`,
+
+                url:
+                    obterUrlConversa(
+                        card
+                    )
+            }
+        );
+    }
+
+
+    function monitorarNovasMensagens(
+        cards
+    ) {
+        if (
+            !POLITICA_NOTIFICACOES ||
+            !Array.isArray(
+                cards
+            ) ||
+            cards.length ===
+                0
+        ) {
+            return;
+        }
+
+
+        const agora =
+            Date.now();
+
+
+        if (
+            !ESTADO_NOTIFICACOES
+                .inicioAquecimento
+        ) {
+            ESTADO_NOTIFICACOES
+                .inicioAquecimento =
+                agora;
+        }
+
+
+        const aquecendo =
+            agora -
+                ESTADO_NOTIFICACOES
+                    .inicioAquecimento <
+            ESTADO_NOTIFICACOES
+                .duracaoAquecimento;
+
+
+        cards.forEach(
+            card => {
+                const dadosTempo =
+                    localizarTemposCard(
+                        card
+                    );
+
+
+                if (
+                    !dadosTempo
+                ) {
+                    return;
+                }
+
+
+                const nomeCliente =
+                    extrairNomeClienteCardConversa(
+                        card
+                    );
+
+
+                const previa =
+                    extrairPreviaMensagemCard(
+                        card,
+                        dadosTempo,
+                        nomeCliente
+                    );
+
+
+                const chave =
+                    obterChaveConversaCard(
+                        card,
+                        nomeCliente
+                    );
+
+
+                const quantidadeNaoLidas =
+                    obterQuantidadeNaoLidasCard(
+                        card
+                    );
+
+
+                const assinatura =
+                    POLITICA_NOTIFICACOES
+                        .createSignature(
+                            {
+                                conversationKey:
+                                    chave,
+
+                                preview:
+                                    previa,
+
+                                unreadCount:
+                                    quantidadeNaoLidas
+                            }
+                        );
+
+
+                const avaliacao =
+                    POLITICA_NOTIFICACOES
+                        .evaluate(
+                            ESTADO_NOTIFICACOES
+                                .conversas
+                                .get(
+                                    chave
+                                ),
+
+                            {
+                                isNow:
+                                    POLITICA_NOTIFICACOES
+                                        .isCurrentActivityLabel(
+                                            dadosTempo
+                                                .ultimaAtividadeTexto
+                                        ),
+
+                                isOutgoing:
+                                    ultimaMensagemFoiDoAtendente(
+                                        card
+                                    ),
+
+                                signature:
+                                    assinatura
+                            },
+
+                            {
+                                now:
+                                    agora,
+
+                                warmingUp:
+                                    aquecendo,
+
+                                suppressNotification:
+                                    !PREFERENCIAS_NOTIFICACOES
+                                        .notificarEmPrimeiroPlano &&
+                                    paginaChatWootEstaEmUso()
+                            }
+                        );
+
+
+                ESTADO_NOTIFICACOES
+                    .conversas
+                    .set(
+                        chave,
+                        avaliacao.next
+                    );
+
+
+                if (
+                    avaliacao.notify
+                ) {
+                    enviarNotificacaoNovaMensagem(
+                        {
+                            chave:
+                                chave,
+
+                            assinatura:
+                                assinatura,
+
+                            nomeCliente:
+                                nomeCliente ||
+                                'Cliente',
+
+                            previa:
+                                previa ||
+                                'Nova mensagem recebida.',
+
+                            url:
+                                obterUrlConversa(
+                                    card
+                                )
+                        }
+                    );
+                }
+            }
+        );
+
+
+        ESTADO_NOTIFICACOES
+            .conversas
+            .forEach(
+                (
+                    estado,
+                    chave
+                ) => {
+                    if (
+                        agora -
+                            estado.seenAt >
+                        30 *
+                            60 *
+                            1000
+                    ) {
+                        ESTADO_NOTIFICACOES
+                            .conversas
+                            .delete(
+                                chave
+                            );
+                    }
+                }
+            );
     }
 
 
@@ -1137,6 +2403,28 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             );
 
 
+        const abaMinhasAtiva =
+            abaConversasMinhasEstaAtiva();
+
+
+        const cardsParaNotificacoes =
+            abaMinhasAtiva
+                ?
+                cards
+                :
+                [];
+
+
+        atualizarTituloMensagensNaoLidas(
+            cardsParaNotificacoes
+        );
+
+
+        monitorarNovasMensagens(
+            cardsParaNotificacoes
+        );
+
+
         cards.forEach(
             card => {
                 const dadosTempo =
@@ -1157,8 +2445,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
                 if (
-                    !dadosTempo ||
-                    !configuracao.ativo
+                    !dadosTempo
                 ) {
                     return;
                 }
@@ -1185,6 +2472,19 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
                 if (
+                    abaMinhasAtiva
+                ) {
+                    monitorarNotificacaoInatividade(
+                        card,
+                        dadosTempo,
+                        nivel,
+                        configuracao
+                    );
+                }
+
+
+                if (
+                    !configuracao.ativo ||
                     nivel ===
                     'normal'
                 ) {
@@ -3722,7 +5022,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             diferenca ===
             0
         ) {
-            return '*HOJE*';
+            return '**HOJE**';
         }
 
 
@@ -3730,7 +5030,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             diferenca ===
             1
         ) {
-            return '*AMANHÃ*';
+            return '**AMANHÃ**';
         }
 
 
@@ -3755,8 +5055,8 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
                     return (
-                        `da *${periodo.nome.toLowerCase()}*, ` +
-                        `das *${periodo.inicio.replace(':00', '')} às ${periodo.fim.replace(':00', '')}*`
+                        `da **${periodo.nome.toLowerCase()}**, ` +
+                        `das **${periodo.inicio.replace(':00', '')} às ${periodo.fim.replace(':00', '')}**`
                     );
                 }
             );
@@ -3824,9 +5124,9 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         const dataTexto =
             referencia
                 ?
-                `${referencia} *${dataFormatada}*`
+                `${referencia}, **${dataFormatada}**`
                 :
-                `*${dataFormatada}*`;
+                `**${dataFormatada}**`;
 
 
         const lista =
@@ -5180,6 +6480,62 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                 color-scheme:
                     var(--way-color-scheme)!important;
+            }
+
+
+            .way-alert-notification-toggle {
+                display:flex!important;
+                align-items:flex-start!important;
+
+                gap:8px!important;
+
+                margin-top:12px!important;
+                padding-top:10px!important;
+
+                border-top:
+                    1px solid
+                    var(--way-border)!important;
+
+                color:
+                    var(--way-text)!important;
+
+                cursor:pointer!important;
+
+                font-size:9px!important;
+                line-height:1.45!important;
+            }
+
+
+            .way-alert-notification-toggle input {
+                width:15px!important;
+                height:15px!important;
+
+                flex:0 0 auto!important;
+
+                margin-top:1px!important;
+
+                accent-color:
+                    var(--way-blue)!important;
+            }
+
+
+            .way-alert-notification-info {
+                padding:10px 12px!important;
+
+                border:
+                    1px solid
+                    var(--way-border)!important;
+
+                border-radius:8px!important;
+
+                background:
+                    var(--way-blue-bg)!important;
+
+                color:
+                    var(--way-text-soft)!important;
+
+                font-size:9px!important;
+                line-height:1.55!important;
             }
 
 
@@ -8371,6 +9727,26 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                         </div>
 
+                        <label class="way-alert-notification-toggle">
+
+                            <input
+                                type="checkbox"
+                                name="notificarAmarelo"
+                                ${
+                                    configuracao.notificarAmarelo
+                                        ?
+                                        'checked'
+                                        :
+                                        ''
+                                }
+                            >
+
+                            <span>
+                                Notificar ao entrar em Atenção
+                            </span>
+
+                        </label>
+
                     </div>
 
 
@@ -8395,6 +9771,26 @@ A previsão para realização do atendimento é dentro do período informado, n�
                             >
 
                         </div>
+
+                        <label class="way-alert-notification-toggle">
+
+                            <input
+                                type="checkbox"
+                                name="notificarLaranja"
+                                ${
+                                    configuracao.notificarLaranja
+                                        ?
+                                        'checked'
+                                        :
+                                        ''
+                                }
+                            >
+
+                            <span>
+                                Notificar ao entrar em Atenção elevada
+                            </span>
+
+                        </label>
 
                     </div>
 
@@ -8421,8 +9817,33 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                         </div>
 
+                        <label class="way-alert-notification-toggle">
+
+                            <input
+                                type="checkbox"
+                                name="notificarVermelho"
+                                ${
+                                    configuracao.notificarVermelho
+                                        ?
+                                        'checked'
+                                        :
+                                        ''
+                                }
+                            >
+
+                            <span>
+                                Notificar ao entrar em Crítico
+                            </span>
+
+                        </label>
+
                     </div>
 
+                </div>
+
+
+                <div class="way-alert-notification-info">
+                    As notificações são independentes das cores dos cards, usam a duração escolhida no painel do Way Tools e respeitam a configuração de avisos com o ChatWoot em primeiro plano.
                 </div>
 
 
@@ -8614,6 +10035,27 @@ A previsão para realização do atendimento é dentro do período informado, n�
                         );
 
 
+                    form.querySelector(
+                        '[name="notificarAmarelo"]'
+                    ).checked =
+                        ALERTAS_INATIVIDADE_PADRAO
+                            .notificarAmarelo;
+
+
+                    form.querySelector(
+                        '[name="notificarLaranja"]'
+                    ).checked =
+                        ALERTAS_INATIVIDADE_PADRAO
+                            .notificarLaranja;
+
+
+                    form.querySelector(
+                        '[name="notificarVermelho"]'
+                    ).checked =
+                        ALERTAS_INATIVIDADE_PADRAO
+                            .notificarVermelho;
+
+
                     status.className =
                         'way-alert-status';
 
@@ -8655,7 +10097,22 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     vermelho:
                         Number(
                             vermelho.value
-                        )
+                        ),
+
+                    notificarAmarelo:
+                        form.querySelector(
+                            '[name="notificarAmarelo"]'
+                        ).checked,
+
+                    notificarLaranja:
+                        form.querySelector(
+                            '[name="notificarLaranja"]'
+                        ).checked,
+
+                    notificarVermelho:
+                        form.querySelector(
+                            '[name="notificarVermelho"]'
+                        ).checked
                 };
 
 
@@ -8733,7 +10190,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
                 status.textContent =
-                    '✓ Configuração salva e aplicada aos cards.';
+                    '✓ Configuração salva e aplicada aos cards e notificações.';
             }
         );
 
@@ -11985,7 +13442,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
              * Captura os dados do cliente ANTES de limpar
              * o comando digitado no campo do chat.
              *
-             * O ia-nocodb é reativo e pode reconstruir partes
+             * O ChatWoot é reativo e pode reconstruir partes
              * do cartão do cliente após os eventos input/change
              * disparados por definirTextoCampo(). Guardando os
              * dados primeiro, a Visita Técnica não perde
@@ -13458,6 +14915,38 @@ A previsão para realização do atendimento é dentro do período informado, n�
        INICIALIZAÇÃO
        ========================================================= */
 
+    function registrarComandoTesteNotificacao() {
+        globalThis.WayToolsRuntime
+            .registerMenuCommand(
+                'way-mensagens',
+                'Testar notificação de mensagem',
+                function () {
+                    const instante =
+                        Date.now();
+
+
+                    enviarNotificacaoNovaMensagem(
+                        {
+                            chave:
+                                'way-tools-notification-test',
+
+                            assinatura:
+                                `way-tools-notification-test-${instante}`,
+
+                            nomeCliente:
+                                'Teste Way Tools',
+
+                            previa:
+                                'As notificações do ChatWoot estão funcionando.',
+
+                            url:
+                                window.location.href
+                        }
+                    );
+                }
+            );
+    }
+
     function iniciar() {
         aplicarTemaAplicativo();
 
@@ -13468,6 +14957,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
         iniciarSincronizacaoTema();
 
 
+        iniciarSincronizacaoPreferenciasNotificacoes();
+
+
         configurarTudo();
 
 
@@ -13475,6 +14967,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         iniciarMonitorComandos();
+
+
+        registrarComandoTesteNotificacao();
 
 
         /*
@@ -13492,7 +14987,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         console.log(
-            '[Way Mensagens] v3.4 ativa.'
+            '[Way Mensagens] v3.5 ativa.'
         );
 
 
@@ -13508,6 +15003,11 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
         console.log(
             '[Way Mensagens] Alertas de inatividade configuráveis ativos: padrão 2 / 5 / 10 minutos.'
+        );
+
+
+        console.log(
+            '[Way Mensagens] Notificações de novas mensagens ativas.'
         );
 
 

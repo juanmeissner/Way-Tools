@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Way Tools",
-  "version": "0.7.0",
+  "version": "0.6.6",
   "description": "Ferramentas da Internet Way prontas para uso no navegador.",
   "minimum_chrome_version": "109",
   "permissions": [
-    "storage"
+    "storage",
+    "notifications",
+    "alarms"
   ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
   "host_permissions": [
     "https://ia-nocodb.internetway.com.br/*",
     "https://erp.internetway.com.br/*",
@@ -38,6 +43,7 @@
         "config/scripts.js",
         "config/spelling-dictionary.js",
         "content/runtime.js",
+        "content/message-notification-policy.js",
         "content/spelling-engine.js",
         "scripts/way-mensagens.js",
         "scripts/way-corretor-ortografico-pro.js"
@@ -57,6 +63,8 @@
         "scripts/way-interface-compacta.js",
         "scripts/way-corretor-ortografico-pro.js"
       ],
+      "all_frames": true,
+      "match_about_blank": true,
       "run_at": "document_start"
     },
     {
@@ -68,6 +76,7 @@
         "config/spelling-dictionary.js",
         "content/runtime.js",
         "content/spelling-engine.js",
+        "scripts/matrix-corrigir-colagem.js",
         "scripts/way-interface-compacta.js",
         "scripts/way-corretor-ortografico-pro.js"
       ],

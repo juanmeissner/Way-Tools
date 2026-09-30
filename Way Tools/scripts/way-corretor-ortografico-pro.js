@@ -187,11 +187,11 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
     }
 
 
-    const DICIONARIO_PESSOAL =
+    let DICIONARIO_PESSOAL =
         carregarDicionarioPessoal();
 
 
-    const MOTOR =
+    let MOTOR =
         MOTOR_FACTORY.create(
             {
                 dictionary:
@@ -200,6 +200,46 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
                     DICIONARIO_PESSOAL
             }
         );
+
+
+    function atualizarDicionarioPessoal() {
+
+        DICIONARIO_PESSOAL =
+            carregarDicionarioPessoal();
+
+
+        MOTOR =
+            MOTOR_FACTORY.create(
+                {
+                    dictionary:
+                        DICIONARIO,
+                    personal:
+                        DICIONARIO_PESSOAL
+                }
+            );
+
+
+        console.log(
+            '[Way AutoCorrect PRO] Dicionário pessoal atualizado:',
+            MOTOR.counts
+                .personalCorrections,
+            'correções e',
+            DICIONARIO_PESSOAL
+                .ignored.length,
+            'exceções.'
+        );
+
+
+        mostrarToast(
+            '✓ Dicionário pessoal atualizado'
+        );
+    }
+
+
+    storage.onValueChanged?.(
+        STORAGE_DICIONARIO_PESSOAL,
+        atualizarDicionarioPessoal
+    );
 
 
     /* =========================================================

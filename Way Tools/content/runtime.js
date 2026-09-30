@@ -115,6 +115,36 @@
             });
 
           return value;
+        },
+
+        onValueChanged(key, callback) {
+          if (typeof callback !== "function") {
+            return () => undefined;
+          }
+
+          const namespacedKey = dataKey(scriptId, key);
+          const listener = (changes, areaName) => {
+            if (areaName !== "local" || !hasOwn(changes, namespacedKey)) {
+              return;
+            }
+
+            const change = changes[namespacedKey];
+
+            if (change.newValue === undefined) {
+              delete snapshot[namespacedKey];
+            } else {
+              snapshot[namespacedKey] = change.newValue;
+            }
+
+            try {
+              callback(change.newValue, change.oldValue);
+            } catch (error) {
+              console.error(`[Way Tools] Falha ao atualizar dados de ${definition.name}:`, error);
+            }
+          };
+
+          chrome.storage.onChanged.addListener(listener);
+          return () => chrome.storage.onChanged.removeListener(listener);
         }
       });
 

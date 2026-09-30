@@ -1,5 +1,5 @@
 /*
- * Way Tools - ERP Copiar Dados v1.4
+ * Way Tools - ERP Copiar Dados v1.6
  * Adaptado do userscript fornecido para o runtime nativo da extensão.
  */
 
@@ -8,7 +8,7 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
 // ==UserScript==
 // @name         Way ERP - Copiar Dados
 // @namespace    way-erp-copiar-dados
-// @version      1.4
+// @version      1.6
 // @description  Copia protocolo, cliente, contrato, conexão e IP e permite abrir o IP em nova aba no ERP Way
 // @match        https://erp.internetway.com.br/*
 // @run-at       document-start
@@ -28,6 +28,19 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
         mensagemContrato:
             '📄 *Contrato:*'
     };
+
+    const ROTULOS_BARRA_SUPERIOR =
+        new Set([
+            'protocolo',
+            'cliente',
+            'contrato'
+        ]);
+
+    let diagnosticoBarraRegistrado =
+        false;
+
+    let modalAbertoAnterior =
+        false;
 
 
     /* =========================================================
@@ -368,6 +381,55 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
 
 
             /* =================================================
+               CAMADA ESTÁVEL DA BARRA SUPERIOR
+               ================================================= */
+
+            #way-erp-copy-layer {
+
+                position:
+                    fixed !important;
+
+                inset:
+                    0 !important;
+
+                z-index:
+                    1200 !important;
+
+                pointer-events:
+                    none !important;
+            }
+
+
+            #way-erp-copy-layer[hidden] {
+
+                display:
+                    none !important;
+            }
+
+
+            #way-erp-copy-layer
+            > .way-erp-copy-floating {
+
+                position:
+                    fixed !important;
+
+                margin:
+                    0 !important;
+
+                pointer-events:
+                    auto !important;
+            }
+
+
+            #way-erp-copy-layer
+            > .way-erp-copy-floating[hidden] {
+
+                display:
+                    none !important;
+            }
+
+
+            /* =================================================
                CONEXÃO
                ================================================= */
 
@@ -596,6 +658,107 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
 
 
         return false;
+    }
+
+
+    function existeModalVisivel() {
+
+        const seletores = [
+            '[role="dialog"]',
+            '[aria-modal="true"]',
+            '.MuiDialog-root',
+            '.MuiModal-root:not(.MuiPopover-root)',
+            '.modal.show'
+        ];
+
+
+        return Array
+            .from(
+                document.querySelectorAll(
+                    seletores.join(', ')
+                )
+            )
+            .some(
+                modal => {
+
+                    if (
+                        elementoEstaOculto(
+                            modal
+                        )
+                    ) {
+
+                        return false;
+                    }
+
+
+                    const retangulo =
+                        modal.getBoundingClientRect();
+
+
+                    return (
+                        retangulo.width >
+                            0 &&
+                        retangulo.height >
+                            0
+                    );
+                }
+            );
+    }
+
+
+    function atualizarVisibilidadeCamadaBarra() {
+
+        const camada =
+            document.getElementById(
+                'way-erp-copy-layer'
+            );
+
+
+        if (
+            !camada
+        ) {
+
+            return;
+        }
+
+
+        const modalAberto =
+            existeModalVisivel();
+
+
+        camada.hidden =
+            modalAberto;
+
+
+        document.documentElement.dataset
+            .wayErpCopyModal =
+                modalAberto
+                    ?
+                    'aberto'
+                    :
+                    'fechado';
+
+
+        if (
+            modalAberto ===
+                modalAbertoAnterior
+        ) {
+
+            return;
+        }
+
+
+        modalAbertoAnterior =
+            modalAberto;
+
+
+        console.info(
+            modalAberto
+                ?
+                '[Way ERP] Botões da barra ocultos enquanto o modal está aberto.'
+                :
+                '[Way ERP] Botões da barra restaurados após o fechamento do modal.'
+        );
     }
 
 
@@ -1066,258 +1229,521 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
        CAMPOS DA BARRA SUPERIOR
        ========================================================= */
 
-    function configurarCampoBarraSuperior({
-        rotuloEsperado,
-        classeBotao,
-        classeContainer =
-            'way-erp-top-dado',
-        tituloBotao,
-        extrairValor,
-        montarTexto
-    }) {
+    function normalizarTextoBarra(
+        valor
+    ) {
 
-        /*
-         * Não utiliza classes como:
-         *
-         * jss109
-         * jss110
-         *
-         * pois elas podem mudar.
-         *
-         * O campo é identificado pelo texto
-         * do rótulo:
-         *
-         * Protocolo
-         * Cliente
-         * Contrato
-         */
+        return String(
+            valor ?? ''
+        )
+            .replace(
+                /\s+/g,
+                ' '
+            )
+            .trim();
+    }
 
-        const rotulos =
-            document.querySelectorAll(
-                'span.MuiTypography-root.MuiTypography-body1'
+
+    function obterCamadaBotoesBarra() {
+
+        if (
+            !document.body
+        ) {
+
+            return null;
+        }
+
+
+        let camada =
+            document.getElementById(
+                'way-erp-copy-layer'
             );
 
 
-        rotulos.forEach(
-            rotulo => {
+        if (
+            camada
+        ) {
+
+            return camada;
+        }
+
+
+        camada =
+            document.createElement(
+                'div'
+            );
+
+
+        camada.id =
+            'way-erp-copy-layer';
+
+
+        camada.setAttribute(
+            'aria-label',
+            'Ferramentas de cópia do Way ERP'
+        );
+
+
+        document.body.appendChild(
+            camada
+        );
+
+
+        return camada;
+    }
+
+
+    function obterCandidatosValor(
+        container,
+        rotulo
+    ) {
+
+        const candidatos =
+            [];
+
+
+        const adicionar =
+            elemento => {
+
+                if (
+                    !elemento ||
+                    elemento ===
+                        rotulo ||
+                    elemento.contains(
+                        rotulo
+                    ) ||
+                    elemento.closest(
+                        '#way-erp-copy-layer'
+                    ) ||
+                    elemento.matches(
+                        'button, hr, svg, path'
+                    )
+                ) {
+
+                    return;
+                }
+
+
+                if (
+                    !candidatos.includes(
+                        elemento
+                    )
+                ) {
+
+                    candidatos.push(
+                        elemento
+                    );
+                }
+            };
+
+
+        container
+            .querySelectorAll(
+                'a, [role="link"]'
+            )
+            .forEach(
+                adicionar
+            );
+
+
+        Array
+            .from(
+                container.children
+            )
+            .forEach(
+                filho => {
+
+                    adicionar(
+                        filho
+                    );
+
+
+                    filho
+                        .querySelectorAll(
+                            'a, [role="link"], span, p'
+                        )
+                        .forEach(
+                            adicionar
+                        );
+                }
+            );
+
+
+        return candidatos;
+    }
+
+
+    function localizarCampoBarraSuperior(
+        rotuloEsperado,
+        extrairValor
+    ) {
+
+        const esperado =
+            normalizarTextoBarra(
+                rotuloEsperado
+            )
+                .toLowerCase();
+
+
+        const rotulos =
+            document.querySelectorAll(
+                'span, p, label'
+            );
+
+
+        for (
+            const rotulo
+            of rotulos
+        ) {
+
+            if (
+                elementoEstaOculto(
+                    rotulo
+                )
+            ) {
+
+                continue;
+            }
+
+
+            const textoRotulo =
+                normalizarTextoBarra(
+                    rotulo.textContent
+                )
+                    .toLowerCase();
+
+
+            if (
+                textoRotulo !==
+                    esperado
+            ) {
+
+                continue;
+            }
+
+
+            const container =
+                rotulo.closest(
+                    '.MuiBox-root'
+                )
+                ||
+                rotulo.parentElement;
+
+
+            if (
+                !container
+            ) {
+
+                continue;
+            }
+
+
+            const candidatos =
+                obterCandidatosValor(
+                    container,
+                    rotulo
+                );
+
+
+            for (
+                const elementoValor
+                of candidatos
+            ) {
 
                 if (
                     elementoEstaOculto(
-                        rotulo
+                        elementoValor
                     )
                 ) {
 
-                    return;
+                    continue;
                 }
 
 
-                const textoRotulo =
-                    String(
-                        rotulo.textContent ||
-                        ''
+                const texto =
+                    normalizarTextoBarra(
+                        elementoValor.textContent
+                    );
+
+
+                if (
+                    !texto ||
+                    ROTULOS_BARRA_SUPERIOR.has(
+                        texto.toLowerCase()
                     )
-                        .replace(
-                            /\s+/g,
-                            ' '
-                        )
-                        .trim()
-                        .toLowerCase();
-
-
-                if (
-                    textoRotulo !==
-                    rotuloEsperado
-                        .toLowerCase()
                 ) {
 
-                    return;
-                }
-
-
-                const container =
-                    rotulo.parentElement;
-
-
-                if (
-                    !container
-                ) {
-
-                    return;
-                }
-
-
-                /*
-                 * O valor é o link <a>
-                 * pertencente ao mesmo bloco
-                 * do rótulo.
-                 */
-
-                const link =
-                    Array
-                        .from(
-                            container.children
-                        )
-                        .find(
-                            elemento => {
-
-                                if (
-                                    elemento.tagName !==
-                                    'A'
-                                ) {
-
-                                    return false;
-                                }
-
-
-                                return Boolean(
-                                    extrairValor(
-                                        elemento.textContent
-                                    )
-                                );
-                            }
-                        );
-
-
-                if (
-                    !link
-                ) {
-
-                    return;
+                    continue;
                 }
 
 
                 const valor =
                     extrairValor(
-                        link.textContent
+                        texto
                     );
 
 
                 if (
-                    !valor
+                    valor
                 ) {
 
-                    return;
+                    return {
+                        container,
+                        elementoValor,
+                        rotulo,
+                        valor
+                    };
                 }
-
-
-                container.classList.add(
-                    classeContainer
-                );
-
-
-                let botao =
-                    container.querySelector(
-                        `:scope > .${classeBotao}`
-                    );
-
-
-                if (
-                    botao
-                ) {
-
-                    botao.dataset.wayValor =
-                        valor;
-
-
-                    return;
-                }
-
-
-                botao =
-                    criarBotaoMini(
-                        tituloBotao
-                    );
-
-
-                botao.classList.add(
-                    classeBotao
-                );
-
-
-                botao.dataset.wayValor =
-                    valor;
-
-
-                botao.addEventListener(
-                    'click',
-
-                    async function (
-                        event
-                    ) {
-
-                        event.preventDefault();
-
-                        event.stopPropagation();
-
-
-                        /*
-                         * Lê novamente o valor
-                         * quando o usuário clicar.
-                         *
-                         * Assim, se o atendimento
-                         * mudar, não utiliza o dado
-                         * anterior.
-                         */
-
-                        const atual =
-                            extrairValor(
-                                link.textContent
-                            )
-                            ||
-                            botao.dataset.wayValor
-                            ||
-                            '';
-
-
-                        const texto =
-                            montarTexto(
-                                atual
-                            );
-
-
-                        if (
-                            !texto
-                        ) {
-
-                            return;
-                        }
-
-
-                        const sucesso =
-                            await copiarTexto(
-                                texto
-                            );
-
-
-                        if (
-                            sucesso
-                        ) {
-
-                            mostrarFeedback(
-                                botao,
-                                true
-                            );
-                        }
-                    }
-                );
-
-
-                link.insertAdjacentElement(
-                    'afterend',
-                    botao
-                );
             }
-        );
+        }
+
+
+        return null;
     }
 
 
+    function posicionarBotaoBarra(
+        botao,
+        elementoValor
+    ) {
+
+        const retangulo =
+            elementoValor
+                .getBoundingClientRect();
+
+
+        const visivel =
+            retangulo.width >
+                0 &&
+            retangulo.height >
+                0 &&
+            retangulo.bottom >
+                0 &&
+            retangulo.right >
+                0 &&
+            retangulo.top <
+                window.innerHeight &&
+            retangulo.left <
+                window.innerWidth;
+
+
+        botao.hidden =
+            !visivel;
+
+
+        if (
+            !visivel
+        ) {
+
+            return;
+        }
+
+
+        const tamanho =
+            24;
+
+
+        const esquerda =
+            Math.min(
+                Math.max(
+                    4,
+                    retangulo.right +
+                        4
+                ),
+                window.innerWidth -
+                    tamanho -
+                    4
+            );
+
+
+        const topo =
+            Math.min(
+                Math.max(
+                    4,
+                    retangulo.top +
+                        (
+                            retangulo.height -
+                            tamanho
+                        ) /
+                        2
+                ),
+                window.innerHeight -
+                    tamanho -
+                    4
+            );
+
+
+        botao.style.left =
+            `${Math.round(
+                esquerda
+            )}px`;
+
+
+        botao.style.top =
+            `${Math.round(
+                topo
+            )}px`;
+    }
+
+
+    function configurarCampoBarraSuperior({
+        rotuloEsperado,
+        classeBotao,
+        tituloBotao,
+        extrairValor,
+        montarTexto
+    }) {
+
+        const camada =
+            obterCamadaBotoesBarra();
+
+
+        if (
+            !camada
+        ) {
+
+            return false;
+        }
+
+
+        const campo =
+            localizarCampoBarraSuperior(
+                rotuloEsperado,
+                extrairValor
+            );
+
+
+        let botao =
+            camada.querySelector(
+                `:scope > .${classeBotao}`
+            );
+
+
+        if (
+            !campo
+        ) {
+
+            if (
+                botao
+            ) {
+
+                botao.remove();
+            }
+
+
+            return false;
+        }
+
+
+        campo.container.classList.add(
+            'way-erp-top-dado'
+        );
+
+
+        if (
+            !botao
+        ) {
+
+            botao =
+                criarBotaoMini(
+                    tituloBotao
+                );
+
+
+            botao.classList.add(
+                classeBotao,
+                'way-erp-copy-floating'
+            );
+
+
+            botao.addEventListener(
+                'click',
+
+                async function (
+                    event
+                ) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+
+                    const campoAtual =
+                        localizarCampoBarraSuperior(
+                            rotuloEsperado,
+                            extrairValor
+                        );
+
+
+                    const atual =
+                        campoAtual
+                            ?.valor
+                        ||
+                        botao
+                            .dataset
+                            .wayValor
+                        ||
+                        '';
+
+
+                    const texto =
+                        montarTexto(
+                            atual
+                        );
+
+
+                    if (
+                        !texto
+                    ) {
+
+                        return;
+                    }
+
+
+                    const sucesso =
+                        await copiarTexto(
+                            texto
+                        );
+
+
+                    if (
+                        sucesso
+                    ) {
+
+                        mostrarFeedback(
+                            botao,
+                            true
+                        );
+                    }
+                }
+            );
+
+
+            camada.appendChild(
+                botao
+            );
+        }
+
+
+        botao.dataset.wayValor =
+            campo.valor;
+
+
+        posicionarBotaoBarra(
+            botao,
+            campo.elementoValor
+        );
+
+
+        return true;
+    }
     /* =========================================================
        PROTOCOLO - BARRA SUPERIOR
        ========================================================= */
 
     function configurarProtocolosBarraSuperior() {
 
-        configurarCampoBarraSuperior({
+        return configurarCampoBarraSuperior({
 
             rotuloEsperado:
                 'Protocolo',
@@ -1346,7 +1772,7 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
 
     function configurarClienteBarraSuperior() {
 
-        configurarCampoBarraSuperior({
+        return configurarCampoBarraSuperior({
 
             rotuloEsperado:
                 'Cliente',
@@ -1372,7 +1798,7 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
 
     function configurarContratoBarraSuperior() {
 
-        configurarCampoBarraSuperior({
+        return configurarCampoBarraSuperior({
 
             rotuloEsperado:
                 'Contrato',
@@ -2013,20 +2439,49 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
        CONFIGURA TUDO
        ========================================================= */
 
+    function executarConfiguracao(
+        nome,
+        callback
+    ) {
+
+        try {
+
+            return callback();
+
+        } catch (erro) {
+
+            console.error(
+                `[Way ERP] Falha ao configurar ${nome}:`,
+                erro
+            );
+
+
+            return false;
+        }
+    }
+
+
     function configurarTudo() {
 
         /*
          * Protocolo no modal.
          */
 
-        configurarProtocolosModal();
+        executarConfiguracao(
+            'protocolo do modal',
+            configurarProtocolosModal
+        );
 
 
         /*
          * Protocolo da barra superior.
          */
 
-        configurarProtocolosBarraSuperior();
+        const camposBarra = [
+            executarConfiguracao(
+                'protocolo da barra superior',
+                configurarProtocolosBarraSuperior
+            ),
 
 
         /*
@@ -2037,7 +2492,10 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
          * 👤 *Nome:* Roberto Rodrigues de Andrade
          */
 
-        configurarClienteBarraSuperior();
+            executarConfiguracao(
+                'cliente da barra superior',
+                configurarClienteBarraSuperior
+            ),
 
 
         /*
@@ -2048,14 +2506,48 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
          * 📄 *Contrato:* 0163835
          */
 
-        configurarContratoBarraSuperior();
+            executarConfiguracao(
+                'contrato da barra superior',
+                configurarContratoBarraSuperior
+            )
+        ]
+            .filter(
+                Boolean
+            )
+            .length;
+
+
+        document.documentElement.dataset
+            .wayErpCopyBarra =
+                String(
+                    camposBarra
+                );
+
+
+        if (
+            camposBarra >
+                0 &&
+            !diagnosticoBarraRegistrado
+        ) {
+
+            diagnosticoBarraRegistrado =
+                true;
+
+
+            console.info(
+                `[Way ERP] Barra superior: ${camposBarra}/3 campo(s) com botão de cópia.`
+            );
+        }
 
 
         /*
          * Número da conexão.
          */
 
-        configurarBotaoConexao();
+        executarConfiguracao(
+            'número da conexão',
+            configurarBotaoConexao
+        );
 
 
         /*
@@ -2065,7 +2557,16 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
          * 🌐 abrir
          */
 
-        configurarBotaoIP();
+        executarConfiguracao(
+            'IP do cliente',
+            configurarBotaoIP
+        );
+
+
+        executarConfiguracao(
+            'visibilidade durante modais',
+            atualizarVisibilidadeCamadaBarra
+        );
     }
 
 
@@ -2125,6 +2626,29 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
                     true
             }
         );
+
+
+        window.addEventListener(
+            'resize',
+            agendar,
+            {
+                passive:
+                    true
+            }
+        );
+
+
+        window.addEventListener(
+            'scroll',
+            agendar,
+            {
+                capture:
+                    true,
+
+                passive:
+                    true
+            }
+        );
     }
 
 
@@ -2155,7 +2679,7 @@ globalThis.WayToolsRuntime.run("way-erp-copiar-dados", () => {
 
 
         console.log(
-            '[Way ERP] Copiar Dados v1.4 ativo.'
+            '[Way ERP] Copiar Dados v1.6 ativo.'
         );
 
 

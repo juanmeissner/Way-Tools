@@ -328,14 +328,10 @@
           sistemas da Internet Way.
         </p>
         <p>
-          Responsável: <span class="placeholder">JUAN CARLO MEISSNER FUERTES MEIRELES LOPES</span><br />
+          Responsável: <strong>JUAN CARLO MEISSNER FUERTES MEIRELES LOPES</strong><br />
           Contato de privacidade:
-          <span class="placeholder">juanmeissnerf@gmail.com</span>
+          <a href="mailto:juanmeissnerf@gmail.com">juanmeissnerf@gmail.com</a>
         </p>
-        <div class="notice">
-          Os campos destacados acima devem ser substituídos pelas informações reais antes da
-          publicação desta política.
-        </div>
       </section>
 
       <section aria-labelledby="escopo-title">
@@ -344,7 +340,8 @@
           A finalidade do Way Tools é melhorar e padronizar a produtividade dos usuários nos fluxos
           de atendimento técnico e operacional. Para cumprir essa finalidade, a extensão oferece
           mensagens padronizadas, cópia de dados operacionais, alertas de inatividade, interface
-          compacta, tema visual, apoio ao agendamento de visitas e correção ortográfica.
+          compacta, tema visual, apoio ao agendamento de visitas, notificações locais e correção
+          ortográfica.
         </p>
         <p>A extensão atua somente nos seguintes endereços:</p>
         <ul>
@@ -393,13 +390,21 @@
               interface necessários para executar as ferramentas oferecidas.
             </p>
           </article>
+
+          <article class="data-card">
+            <h3>Conteúdo das notificações</h3>
+            <p>
+              Nome do cliente, prévia da mensagem, nível de inatividade e endereço da conversa,
+              conforme as opções de notificação escolhidas pelo usuário.
+            </p>
+          </article>
         </div>
 
         <h3>Dados de configuração</h3>
         <p>
           O Way Tools também armazena preferências técnicas, como ferramentas ativadas, mensagens
-          personalizadas, limites de alertas, preferência de tema, posição de abas e estado do
-          corretor ortográfico.
+          personalizadas, limites de alertas, preferência de tema, posição de abas, estado do
+          corretor ortográfico, duração e condições escolhidas para notificações.
         </p>
 
         <p>
@@ -417,6 +422,7 @@
           <li>copiar dados operacionais mediante ação do usuário;</li>
           <li>preencher e manter temporariamente rascunhos de visitas técnicas;</li>
           <li>calcular e apresentar alertas de inatividade;</li>
+          <li>exibir notificações locais de novas mensagens e níveis de inatividade;</li>
           <li>adaptar a interface e o tema dos sistemas compatíveis;</li>
           <li>salvar preferências e configurações escolhidas pelo usuário.</li>
         </ul>
@@ -437,6 +443,12 @@
             <strong>Rascunhos temporários:</strong> dados de visitas técnicas podem ser mantidos no
             <code>sessionStorage</code>, separados por atendimento, e normalmente são descartados ao
             encerrar a aba ou sessão correspondente.
+          </li>
+          <li>
+            <strong>Destino temporário das notificações:</strong> o identificador da aba e o endereço
+            da conversa podem ser mantidos no <code>chrome.storage.session</code> para abrir o
+            atendimento quando o usuário clicar na notificação. Esses dados permanecem somente
+            durante a sessão do navegador.
           </li>
           <li>
             <strong>Área de transferência:</strong> informações somente são copiadas quando o
@@ -462,6 +474,11 @@
           e políticas desses próprios sistemas. O Way Tools apenas auxilia a interface local exibida
           no navegador.
         </p>
+        <p>
+          Quando as notificações estão habilitadas, o Way Tools entrega o nome do cliente e a prévia
+          configurada ao sistema de notificações do próprio navegador e do sistema operacional. Esse
+          processamento é local e não representa envio para servidores controlados pelo desenvolvedor.
+        </p>
       </section>
 
       <section aria-labelledby="permissoes-title">
@@ -470,9 +487,17 @@
         <p>
           Usada para salvar localmente configurações, preferências e mensagens da extensão.
         </p>
+        <h3><code>notifications</code></h3>
+        <p>
+          Usada para mostrar avisos locais de novas mensagens e alertas de inatividade do ChatWoot.
+        </p>
+        <h3><code>alarms</code></h3>
+        <p>
+          Usada para encerrar notificações temporárias de acordo com a duração escolhida pelo usuário.
+        </p>
         <h3>Permissões dos hosts compatíveis</h3>
         <p>
-          Usadas para executar os recursos somente no IA NocoDB, ERP Way e Matrix, permitindo que a
+          Usadas para executar os recursos somente no ChatWoot, ERP Way e Matrix, permitindo que a
           extensão leia e ajuste os elementos necessários dessas páginas. Não é solicitado acesso a
           todos os sites visitados pelo usuário.
         </p>
@@ -485,6 +510,8 @@
         <ul>
           <li>ativar ou desativar individualmente as ferramentas pelo painel do Way Tools;</li>
           <li>alterar ou excluir mensagens personalizadas;</li>
+          <li>desativar notificações, alterar sua duração e escolher quando elas podem aparecer;</li>
+          <li>ativar separadamente notificações de atenção, atenção elevada e nível crítico;</li>
           <li>apagar rascunhos temporários ou encerrar a aba correspondente;</li>
           <li>remover os dados locais ao desinstalar a extensão ou limpar seus dados no Chrome.</li>
         </ul>
@@ -502,6 +529,10 @@
           O tratamento é proporcional às funções solicitadas pelo usuário e restrito ao mínimo
           necessário para o funcionamento da extensão.
         </p>
+        <p>
+          O uso das informações tratadas pelo Way Tools está em conformidade com as restrições de
+          Uso Limitado da Política de Dados do Usuário da Chrome Web Store.
+        </p>
       </section>
 
       <section aria-labelledby="seguranca-title">
@@ -511,6 +542,12 @@
           aos domínios declarados. Nenhum método de armazenamento ou processamento é totalmente livre
           de riscos; por isso, os usuários devem proteger o perfil do navegador, o dispositivo e o
           acesso aos sistemas corporativos.
+        </p>
+        <p>
+          Notificações podem aparecer na Central de Notificações ou na tela bloqueada, conforme as
+          configurações do Windows e do navegador. Em dispositivos compartilhados, o usuário deve
+          desativar os avisos ou ajustar o sistema operacional para evitar a exposição de nomes e
+          prévias de mensagens.
         </p>
       </section>
 
@@ -537,7 +574,7 @@
         <p>
           Para dúvidas, solicitações ou questões relacionadas a esta política e ao tratamento de
           dados pelo Way Tools, entre em contato pelo e-mail:
-          <span class="placeholder">juanmeissnerf@gmail.com</span>.
+          <a href="mailto:juanmeissnerf@gmail.com">juanmeissnerf@gmail.com</a>.
         </p>
       </section>
     </main>
