@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Way Tools</title>
+    <link rel="stylesheet" href="popup.css" />
+    <script src="../config/scripts.js" defer></script>
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <span class="brand-mark" aria-hidden="true">W</span>
+      <div>
+        <h1>Way Tools</h1>
+        <p>Ferramentas prontas para sua rotina</p>
+      </div>
+      <span class="version" id="extension-version"></span>
+    </header>
+
+    <main>
+      <section class="page-status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <strong id="page-status-title">Verificando esta página…</strong>
+          <p id="page-status-description">Aguarde um instante.</p>
+        </div>
+      </section>
+
+      <div class="section-heading">
+        <span>Scripts instalados</span>
+        <span id="script-count">1</span>
+      </div>
+
+      <section id="scripts-list" class="scripts-list" aria-label="Scripts instalados"></section>
+
+      <section id="page-commands" class="page-commands" hidden>
+        <div class="section-heading commands-heading">
+          <span>Ações desta página</span>
+        </div>
+        <div id="commands-list" class="commands-list"></div>
+      </section>
+
+      <p id="change-note" class="change-note" role="status" hidden>
+        Recarregue a página para aplicar a alteração.
+      </p>
+    </main>
+
+    <footer>
+      <button id="reload-page" type="button" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7" />
+        </svg>
+        Recarregar página
+      </button>
+      <span>Uso interno • Internet Way</span>
+    </footer>
+  </body>
+</html>

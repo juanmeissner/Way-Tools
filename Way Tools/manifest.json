@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "Way Tools",
+  "version": "0.6.2",
+  "description": "Ferramentas da Internet Way prontas para uso no navegador.",
+  "minimum_chrome_version": "109",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://ia-nocodb.internetway.com.br/*",
+    "https://erp.internetway.com.br/*",
+    "https://wayinternet.matrixdobrasil.ai/*"
+  ],
+  "action": {
+    "default_title": "Way Tools",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ia-nocodb.internetway.com.br/*"
+      ],
+      "js": [
+        "config/default-messages.js",
+        "config/scripts.js",
+        "content/runtime.js",
+        "scripts/way-mensagens.js",
+        "scripts/way-corretor-ortografico-pro.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://erp.internetway.com.br/*"
+      ],
+      "js": [
+        "config/scripts.js",
+        "content/runtime.js",
+        "scripts/way-erp-copiar-dados.js",
+        "scripts/way-interface-compacta.js",
+        "scripts/way-corretor-ortografico-pro.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://wayinternet.matrixdobrasil.ai/*"
+      ],
+      "js": [
+        "config/scripts.js",
+        "content/runtime.js",
+        "scripts/way-interface-compacta.js",
+        "scripts/way-corretor-ortografico-pro.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}
