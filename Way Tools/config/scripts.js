@@ -32,8 +32,8 @@
     Object.freeze({
       id: "way-corretor-ortografico-pro",
       name: "Corretor Ortográfico PRO",
-      version: "3.0",
-      description: "Correção automática PT-BR para atendimento, suporte técnico e telecom.",
+      version: "3.2",
+      description: "Correção PT-BR ampliada, termos de suporte e telecom, alertas contextuais e dicionário pessoal.",
       matches: Object.freeze([
         "https://wayinternet.matrixdobrasil.ai/*",
         "https://erp.internetway.com.br/*",

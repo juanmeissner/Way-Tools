@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Way Tools",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Ferramentas da Internet Way prontas para uso no navegador.",
   "minimum_chrome_version": "109",
   "permissions": [
@@ -36,7 +36,9 @@
       "js": [
         "config/default-messages.js",
         "config/scripts.js",
+        "config/spelling-dictionary.js",
         "content/runtime.js",
+        "content/spelling-engine.js",
         "scripts/way-mensagens.js",
         "scripts/way-corretor-ortografico-pro.js"
       ],
@@ -48,7 +50,9 @@
       ],
       "js": [
         "config/scripts.js",
+        "config/spelling-dictionary.js",
         "content/runtime.js",
+        "content/spelling-engine.js",
         "scripts/way-erp-copiar-dados.js",
         "scripts/way-interface-compacta.js",
         "scripts/way-corretor-ortografico-pro.js"
@@ -61,7 +65,9 @@
       ],
       "js": [
         "config/scripts.js",
+        "config/spelling-dictionary.js",
         "content/runtime.js",
+        "content/spelling-engine.js",
         "scripts/way-interface-compacta.js",
         "scripts/way-corretor-ortografico-pro.js"
       ],

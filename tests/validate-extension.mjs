@@ -12,9 +12,11 @@ const root = resolve(import.meta.dirname, "..");
 const extensionRoot = resolve(root, "Way Tools");
 const manifestPath = resolve(extensionRoot, "manifest.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+const packageMetadata = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 
 assert.equal(manifest.manifest_version, 3, "A extensão precisa usar Manifest V3.");
 assert.equal(manifest.name, "Way Tools");
+assert.equal(manifest.version, packageMetadata.version, "A versão do pacote deve acompanhar o manifesto.");
 assert.equal(basename(extensionRoot), manifest.name, "A pasta carregável deve ter o nome da extensão.");
 assert.deepEqual(manifest.permissions, ["storage"]);
 assert.ok(!manifest.permissions.includes("activeTab"), "activeTab é redundante quando os hosts já estão declarados.");
@@ -28,6 +30,14 @@ assert.ok(
     manifest.content_scripts[0].js.indexOf("scripts/way-mensagens.js"),
   "As mensagens nativas precisam ser carregadas antes do script Way Mensagens."
 );
+for (const entry of manifest.content_scripts) {
+  const dictionaryIndex = entry.js.indexOf("config/spelling-dictionary.js");
+  const engineIndex = entry.js.indexOf("content/spelling-engine.js");
+  const correctorIndex = entry.js.indexOf("scripts/way-corretor-ortografico-pro.js");
+  assert.ok(dictionaryIndex >= 0, `Dicionário ausente em ${entry.matches.join(", ")}.`);
+  assert.ok(engineIndex > dictionaryIndex, "O motor ortográfico deve carregar depois do dicionário.");
+  assert.ok(correctorIndex > engineIndex, "O corretor deve carregar depois do motor ortográfico.");
+}
 
 const referencedFiles = [
   manifest.action.default_popup,
@@ -65,6 +75,10 @@ const scriptSource = readFileSync(resolve(extensionRoot, "scripts/way-mensagens.
 const erpScriptSource = readFileSync(resolve(extensionRoot, "scripts/way-erp-copiar-dados.js"), "utf8");
 const compactInterfaceSource = readFileSync(resolve(extensionRoot, "scripts/way-interface-compacta.js"), "utf8");
 const spellingScriptSource = readFileSync(resolve(extensionRoot, "scripts/way-corretor-ortografico-pro.js"), "utf8");
+const spellingDictionarySource = readFileSync(resolve(extensionRoot, "config/spelling-dictionary.js"), "utf8");
+const spellingEngineSource = readFileSync(resolve(extensionRoot, "content/spelling-engine.js"), "utf8");
+const popupSource = readFileSync(resolve(extensionRoot, "popup/popup.js"), "utf8");
+const popupHtmlSource = readFileSync(resolve(extensionRoot, "popup/popup.html"), "utf8");
 assert.match(catalogSource, /id:\s*"way-mensagens"/);
 assert.match(catalogSource, /version:\s*"3\.4"/);
 assert.match(catalogSource, /id:\s*"way-erp-copiar-dados"/);
@@ -73,7 +87,7 @@ assert.match(catalogSource, /id:\s*"way-interface-compacta"/);
 assert.match(catalogSource, /name:\s*"Interface Compacta \+ Tema"/);
 assert.match(catalogSource, /version:\s*"3\.4 \+ 1\.1"/);
 assert.match(catalogSource, /id:\s*"way-corretor-ortografico-pro"/);
-assert.match(catalogSource, /version:\s*"3\.0"/);
+assert.match(catalogSource, /version:\s*"3\.2"/);
 
 const catalogContext = {};
 vm.runInNewContext(catalogSource, catalogContext);
@@ -94,11 +108,31 @@ assert.match(scriptSource, /const GM_setValue = storage\.setValue/);
 assert.match(scriptSource, /\[Way Mensagens\] v3\.4 ativa\./);
 assert.match(scriptSource, /function obterMensagensNativas\(\)/);
 assert.match(scriptSource, /GM_getValue\(\s*CONFIG\.storageKey,\s*null\s*\)/);
+const defaultVisitTemplate = scriptSource.match(
+  /const TEMPLATE_VISITA_PADRAO\s*=\s*`([\s\S]*?)`;/
+)?.[1];
+assert.ok(defaultVisitTemplate, "O template padrão de visita precisa existir.");
+assert.doesNotMatch(
+  defaultVisitTemplate,
+  /(?<!\*)\*(?!\*)[^*]+(?<!\*)\*(?!\*)/,
+  "O template padrão de visita deve usar dois asteriscos para formatação em negrito."
+);
 
 const nativeMessages = loadNativeMessages();
 assert.equal(nativeMessages.length, 16, "O catálogo nativo precisa conter as 16 mensagens do backup.");
 assert.equal(new Set(nativeMessages.map((message) => message.id)).size, nativeMessages.length, "Os IDs das mensagens nativas precisam ser únicos.");
 assert.equal(new Set(nativeMessages.map((message) => message.comando)).size, nativeMessages.length, "Os comandos das mensagens nativas precisam ser únicos.");
+const nativeMessagesText = JSON.stringify(nativeMessages);
+assert.doesNotMatch(
+  nativeMessagesText,
+  /(?<!\*)\*(?!\*)[^*]+(?<!\*)\*(?!\*)/,
+  "As mensagens nativas devem usar dois asteriscos para formatação em negrito."
+);
+assert.doesNotMatch(
+  nativeMessagesText,
+  /\{\{(?:endereço|período|horário)\}\}/,
+  "As tags dinâmicas devem manter os identificadores sem acento reconhecidos pelo script."
+);
 assert.equal(nativeMessagesSource, renderNativeMessagesModule(nativeMessages), "O módulo nativo está desatualizado em relação ao JSON.");
 
 const nativeContext = {};
@@ -126,6 +160,84 @@ assert.match(
 assert.match(spellingScriptSource, /WayToolsRuntime\.run\("way-corretor-ortografico-pro"/);
 assert.match(spellingScriptSource, /const localStorage = Object\.freeze/);
 assert.match(spellingScriptSource, /\[Way AutoCorrect PRO\] iniciado\./);
+assert.match(spellingScriptSource, /WAY_TOOLS_SPELLING_DICTIONARY/);
+assert.match(spellingScriptSource, /WayToolsSpellingEngine/);
+assert.match(
+  spellingScriptSource,
+  /\.ProseMirror\[contenteditable="true"\]/,
+  "O corretor precisa reconhecer o editor ProseMirror usado no chat do IA NocoDB."
+);
+assert.match(popupHtmlSource, /id="personal-dictionary"/);
+assert.match(popupHtmlSource, /id="correction-form"/);
+assert.match(popupHtmlSource, /id="ignored-form"/);
+assert.match(popupSource, /way-corretor-dicionario-pessoal-v1/);
+
+const spellingContext = {};
+vm.createContext(spellingContext);
+vm.runInContext(spellingDictionarySource, spellingContext);
+vm.runInContext(spellingEngineSource, spellingContext);
+
+const spellingDictionary = spellingContext.WAY_TOOLS_SPELLING_DICTIONARY;
+assert.ok(Object.isFrozen(spellingDictionary));
+assert.ok(Object.isFrozen(spellingDictionary.terms));
+assert.ok(Object.isFrozen(spellingDictionary.corrections));
+assert.ok(
+  Object.keys(spellingDictionary.corrections).length >= 500,
+  "O vocabulário deve manter pelo menos 500 correções seguras."
+);
+assert.ok(
+  Object.keys(spellingDictionary.terms).length >= 90,
+  "O vocabulário deve manter pelo menos 90 termos técnicos padronizados."
+);
+assert.equal(
+  Object.entries(spellingDictionary.corrections)
+    .filter(([source, target]) => source === target.toLocaleLowerCase("pt-BR"))
+    .length,
+  0,
+  "O dicionário não deve conter substituições sem efeito."
+);
+
+const spellingEngine = spellingContext.WayToolsSpellingEngine.create({
+  dictionary: spellingDictionary
+});
+
+const correctionCorpus = [
+  ["voce nao possui conexao", "você não possui conexão"],
+  ["NAO FOI POSSIVEL", "NÃO FOI POSSÍVEL"],
+  ["Concerteza o wifi esta disponivel", "Com certeza o Wi-Fi esta disponível"],
+  ["velociade de 500 mbps em 5 ghz", "velocidade de 500 Mbps em 5 GHz"],
+  ["o clietne solicitou o bolteo", "o cliente solicitou o boleto"],
+  ["configruacao do roteaodr", "configuração do roteador"],
+  ["menssagem encaminahda ao finaceiro", "mensagem encaminhada ao financeiro"],
+  ["teste com donwload e uplaod", "teste com download e upload"],
+  ["Olá , tudo bem ?", "Olá, tudo bem?"],
+  ["analise publica media", "analise publica media"],
+  ["Acesse https://nao.example.com/configuracao", "Acesse https://nao.example.com/configuracao"],
+  ["Envie para voce@example.com", "Envie para voce@example.com"]
+];
+
+for (const [input, expected] of correctionCorpus) {
+  assert.equal(spellingEngine.correctText(input), expected, `Correção inesperada para: ${input}`);
+}
+
+assert.ok(
+  spellingEngine.contextualSuggestions("Por favor, analise esta media.").length >= 3,
+  "Termos ambíguos devem gerar sugestões contextuais."
+);
+
+const personalEngine = spellingContext.WayToolsSpellingEngine.create({
+  dictionary: spellingDictionary,
+  personal: {
+    corrections: { internete: "internet" },
+    ignored: ["wifi"]
+  }
+});
+assert.equal(personalEngine.correctText("internete wifi"), "internet wifi");
+assert.match(
+  spellingScriptSource,
+  /@match\s+https:\/\/ia-nocodb\.internetway\.com\.br\/\*/,
+  "Os metadados do corretor devem documentar o suporte ao IA NocoDB."
+);
 assert.ok(
   catalogContext.WAY_TOOLS_SCRIPTS
     .find((script) => script.id === "way-corretor-ortografico-pro")
@@ -232,7 +344,9 @@ assert.equal(menuCommandExecuted, true, "O painel precisa conseguir executar com
 const javascriptFiles = [
   "config/scripts.js",
   "config/default-messages.js",
+  "config/spelling-dictionary.js",
   "content/runtime.js",
+  "content/spelling-engine.js",
   "popup/popup.js",
   "scripts/way-mensagens.js",
   "scripts/way-erp-copiar-dados.js",

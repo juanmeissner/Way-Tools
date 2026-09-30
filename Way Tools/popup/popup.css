@@ -19,7 +19,9 @@
 body {
   width: 390px;
   min-height: 440px;
+  max-height: 600px;
   margin: 0;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 100% 0, rgba(252, 92, 0, 0.14), transparent 14rem),
     var(--navy-950);
@@ -30,6 +32,10 @@ body {
 button,
 input {
   font: inherit;
+}
+
+input {
+  min-width: 0;
 }
 
 .app-header {
@@ -253,6 +259,144 @@ main {
   margin: 12px 2px 0;
   color: #ffc19d;
   font-size: 11px;
+}
+
+.dictionary-panel {
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  background: rgba(5, 31, 61, 0.8);
+}
+
+.dictionary-panel summary {
+  padding: 13px 14px;
+  color: #dcecff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dictionary-panel[open] summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dictionary-content {
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+}
+
+.dictionary-intro,
+.dictionary-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.dictionary-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dictionary-form label {
+  display: grid;
+  gap: 5px;
+  color: #b7c9dc;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.dictionary-form input {
+  width: 100%;
+  height: 34px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(0, 12, 29, 0.72);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.dictionary-form input:focus {
+  border-color: var(--orange-light);
+  box-shadow: 0 0 0 2px rgba(252, 92, 0, 0.14);
+}
+
+.dictionary-form button {
+  grid-column: 1 / -1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy-700);
+  color: #eaf4ff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dictionary-form button:hover {
+  background: #194b7c;
+}
+
+.compact-form {
+  grid-template-columns: 1fr auto;
+  padding-top: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.compact-form button {
+  grid-column: auto;
+  align-self: end;
+  padding-inline: 10px;
+}
+
+.dictionary-list {
+  display: grid;
+  gap: 5px;
+}
+
+.dictionary-empty {
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.13);
+  color: #7188a2;
+  font-size: 10px;
+}
+
+.dictionary-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #bed1e6;
+  font-size: 10px;
+}
+
+.dictionary-item span {
+  overflow-wrap: anywhere;
+}
+
+.dictionary-item button {
+  border: 0;
+  background: transparent;
+  color: #ffad80;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dictionary-status.success {
+  color: var(--success);
+}
+
+.dictionary-status.error {
+  color: #ff9b9b;
 }
 
 .commands-heading {

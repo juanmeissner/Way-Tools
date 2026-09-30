@@ -182,26 +182,26 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
        ========================================================= */
 
     const TEMPLATE_VISITA_PADRAO =
-`✅ *Visita Técnica Agendada com Sucesso*
+`✅ **Visita Técnica Agendada com Sucesso**
 
-👤 *Nome:* {{nomecliente}}
-📍 *Endereço:* {{endereco}}
-📅 *Dia:* {{data}}
-🌤️ *Período:* {{periodo}}
-📱 *Telefone:* {{telefone}}
-🕐 *Previsão de atendimento:* {{horario}}
-🔢 *Protocolo:* {{protocolo}}
+👤 **Nome:** {{nomecliente}}
+📍 **Endereço:** {{endereco}}
+📅 **Dia:** {{data}}
+🌤️ **Período:** {{periodo}}
+📱 **Telefone:** {{telefone}}
+🕐 **Previsão de atendimento:** {{horario}}
+🔢 **Protocolo:** {{protocolo}}
 
-📲 *Confirmação da visita*
-O setor de agendamento enviará uma mensagem via *WhatsApp* para confirmar a visita. *É importante responder à mensagem* para que o agendamento seja validado.
+📲 **Confirmação da visita**
+O setor de agendamento enviará uma mensagem via **WhatsApp** para confirmar a visita. **É importante responder à mensagem** para que o agendamento seja validado.
 
-🚗 *Deslocamento do técnico*
-Assim que o técnico iniciar o deslocamento até o endereço, você receberá um *SMS* com a *placa e os dados do veículo* do profissional responsável pela execução da ordem de serviço.
+🚗 **Deslocamento do técnico**
+Assim que o técnico iniciar o deslocamento até o endereço, você receberá um **SMS** com a **placa e os dados do veículo** do profissional responsável pela execução da ordem de serviço.
 
-⚠️ *Importante:*
-É necessário que haja *uma pessoa maior de 18 anos no local* para receber o técnico.
+⚠️ **Importante:**
+É necessário que haja **uma pessoa maior de 18 anos no local** para receber o técnico.
 
-🔄 *Precisa reagendar?*
+🔄 **Precisa reagendar?**
 Caso não possa receber o técnico no período agendado, basta responder à mensagem de confirmação enviada pelo WhatsApp solicitando um novo horário ou entrar em contato com nossa equipe.
 
 Estamos à disposição e teremos prazer em atendê-lo! 😊`;

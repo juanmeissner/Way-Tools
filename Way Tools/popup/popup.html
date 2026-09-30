@@ -34,6 +34,40 @@
 
       <section id="scripts-list" class="scripts-list" aria-label="Scripts instalados"></section>
 
+      <details id="personal-dictionary" class="dictionary-panel">
+        <summary>Dicionário pessoal</summary>
+        <div class="dictionary-content">
+          <p class="dictionary-intro">
+            Cadastre correções e palavras que nunca devem ser alteradas. Os dados ficam somente neste navegador.
+          </p>
+
+          <form id="correction-form" class="dictionary-form">
+            <label>
+              Ao digitar
+              <input id="correction-source" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: internete" required />
+            </label>
+            <label>
+              Corrigir para
+              <input id="correction-target" type="text" maxlength="80" autocomplete="off" placeholder="Ex.: internet" required />
+            </label>
+            <button type="submit">Adicionar correção</button>
+          </form>
+
+          <div id="corrections-list" class="dictionary-list" aria-label="Correções pessoais"></div>
+
+          <form id="ignored-form" class="dictionary-form compact-form">
+            <label>
+              Nunca corrigir
+              <input id="ignored-word" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: intranet" required />
+            </label>
+            <button type="submit">Adicionar exceção</button>
+          </form>
+
+          <div id="ignored-list" class="dictionary-list" aria-label="Exceções pessoais"></div>
+          <p id="dictionary-status" class="dictionary-status" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+
       <section id="page-commands" class="page-commands" hidden>
         <div class="section-heading commands-heading">
           <span>Ações desta página</span>

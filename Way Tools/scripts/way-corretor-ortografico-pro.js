@@ -1,5 +1,5 @@
 /*
- * Way Tools - Corretor Ortográfico PRO v3.0
+ * Way Tools - Corretor Ortográfico PRO v3.2
  * Adaptado para ativação e armazenamento nativos da extensão.
  */
 
@@ -19,8 +19,9 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
 // ==UserScript==
 // @name         Way - Corretor Ortográfico PRO
 // @namespace    way-autocorrect
-// @version      3.0
+// @version      3.2
 // @description  Corretor automático PT-BR focado em atendimento, suporte técnico e telecom
+// @match        https://ia-nocodb.internetway.com.br/*
 // @match        https://wayinternet.matrixdobrasil.ai/*
 // @match        https://erp.internetway.com.br/*
 // @run-at       document-start
@@ -81,6 +82,7 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
     const SELETOR = [
         '.faketextbox.pastable[contenteditable="true"]',
         'div[id^="message-"][contenteditable="true"]',
+        '.ProseMirror[contenteditable="true"]',
         'textarea'
     ].join(',');
 
@@ -96,575 +98,108 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
 
 
     /* =========================================================
-       TERMOS QUE DEVEM TER CAPITALIZAÇÃO EXATA
+       DICIONÁRIO E MOTOR ORTOGRÁFICO
        ========================================================= */
 
-    const TERMOS_PADRAO = {
+    const STORAGE_DICIONARIO_PESSOAL =
+        'way-corretor-dicionario-pessoal-v1';
 
-        "wifi": "Wi-Fi",
-        "wi-fi": "Wi-Fi",
 
-        "ip": "IP",
-        "ipv4": "IPv4",
-        "ipv6": "IPv6",
+    function carregarDicionarioPessoal() {
 
-        "dns": "DNS",
-        "dhcp": "DHCP",
+        const vazio = {
+            corrections: {},
+            ignored: []
+        };
 
-        "nat": "NAT",
-        "cgnat": "CGNAT",
-        "dmz": "DMZ",
 
-        "mac": "MAC",
-        "ssid": "SSID",
+        try {
 
-        "lan": "LAN",
-        "wan": "WAN",
+            const salvo =
+                localStorage.getItem(
+                    STORAGE_DICIONARIO_PESSOAL
+                );
 
-        "vpn": "VPN",
 
-        "pppoe": "PPPoE",
+            if (!salvo) {
+                return vazio;
+            }
 
-        "onu": "ONU",
-        "ont": "ONT",
-        "olt": "OLT",
 
-        "ftth": "FTTH",
-        "pon": "PON",
-        "gpon": "GPON",
+            const dados =
+                JSON.parse(
+                    salvo
+                );
 
-        "los": "LOS",
 
-        "dbm": "dBm",
+            return {
+                corrections:
+                    dados &&
+                    typeof dados.corrections ===
+                        'object' &&
+                    !Array.isArray(
+                        dados.corrections
+                    )
+                        ?
+                        dados.corrections
+                        :
+                        {},
+                ignored:
+                    Array.isArray(
+                        dados?.ignored
+                    )
+                        ?
+                        dados.ignored
+                        :
+                        []
+            };
 
-        "iptv": "IPTV",
+        } catch (error) {
 
-        "smarttv": "Smart TV",
-        "smartbox": "Smart Box",
+            console.warn(
+                '[Way AutoCorrect PRO] Dicionário pessoal inválido:',
+                error
+            );
 
-        "webrtc": "WebRTC",
+            return vazio;
+        }
+    }
 
-        "api": "API",
 
-        "tcp": "TCP",
-        "udp": "UDP",
+    const DICIONARIO =
+        globalThis
+            .WAY_TOOLS_SPELLING_DICTIONARY;
 
-        "http": "HTTP",
-        "https": "HTTPS",
 
-        "way": "Way",
+    const MOTOR_FACTORY =
+        globalThis
+            .WayToolsSpellingEngine;
 
-        "matrix": "Matrix",
 
-        "huawei": "Huawei",
-        "intelbras": "Intelbras",
-        "mikrotik": "MikroTik",
-        "zte": "ZTE",
+    if (
+        !DICIONARIO ||
+        !MOTOR_FACTORY
+    ) {
 
-        "whatsapp": "WhatsApp",
-        "android": "Android",
-        "iphone": "iPhone",
+        throw new Error(
+            'Dicionário ou motor ortográfico não carregado.'
+        );
+    }
 
-        "windows": "Windows",
-        "chrome": "Chrome",
 
-        "google": "Google",
-        "youtube": "YouTube",
-        "netflix": "Netflix"
-    };
+    const DICIONARIO_PESSOAL =
+        carregarDicionarioPessoal();
 
 
-    /* =========================================================
-       DICIONÁRIO DE CORREÇÕES SEGURAS
-       ========================================================= */
-
-    const CORRECOES = {
-
-        /* -----------------------------------------------------
-           PORTUGUÊS / ACENTUAÇÃO
-           ----------------------------------------------------- */
-
-        "nao": "não",
-        "voce": "você",
-        "voces": "vocês",
-
-        "tambem": "também",
-        "ja": "já",
-        "ate": "até",
-
-        "apos": "após",
-        "atraves": "através",
-        "alem": "além",
-
-        "possivel": "possível",
-        "impossivel": "impossível",
-
-        "disponivel": "disponível",
-        "disponiveis": "disponíveis",
-
-        "necessario": "necessário",
-        "necessaria": "necessária",
-        "necessarios": "necessários",
-        "necessarias": "necessárias",
-
-        "proximo": "próximo",
-        "proxima": "próxima",
-        "proximos": "próximos",
-        "proximas": "próximas",
-
-        "ultimo": "último",
-        "ultima": "última",
-        "ultimos": "últimos",
-        "ultimas": "últimas",
-
-        "facil": "fácil",
-        "dificil": "difícil",
-
-        "unico": "único",
-        "unica": "única",
-
-        "publico": "público",
-        "publica": "pública",
-
-        "automatico": "automático",
-        "automatica": "automática",
-
-        "basico": "básico",
-        "basica": "básica",
-
-        "especifico": "específico",
-        "especifica": "específica",
-
-        "tecnico": "técnico",
-        "tecnica": "técnica",
-        "tecnicos": "técnicos",
-        "tecnicas": "técnicas",
-
-        "fisico": "físico",
-        "fisica": "física",
-
-        "eletrico": "elétrico",
-        "eletrica": "elétrica",
-
-        "eletronico": "eletrônico",
-        "eletronica": "eletrônica",
-
-        "logico": "lógico",
-        "logica": "lógica",
-
-        "rapido": "rápido",
-        "rapida": "rápida",
-
-        "maximo": "máximo",
-        "maxima": "máxima",
-
-        "minimo": "mínimo",
-        "minima": "mínima",
-
-        "medio": "médio",
-        "media": "média",
-
-        "otimo": "ótimo",
-        "otima": "ótima",
-
-        "numero": "número",
-        "numeros": "números",
-
-        "codigo": "código",
-        "codigos": "códigos",
-
-        "endereco": "endereço",
-        "enderecos": "endereços",
-
-        "horario": "horário",
-        "horarios": "horários",
-
-        "periodo": "período",
-        "periodos": "períodos",
-
-        "area": "área",
-        "areas": "áreas",
-
-        "nivel": "nível",
-        "niveis": "níveis",
-
-        "duvida": "dúvida",
-        "duvidas": "dúvidas",
-
-        "residencia": "residência",
-        "residencias": "residências",
-
-        "predio": "prédio",
-        "predios": "prédios",
-
-        "comodo": "cômodo",
-        "comodos": "cômodos",
-
-        "usuario": "usuário",
-        "usuarios": "usuários",
-
-        "responsavel": "responsável",
-        "responsaveis": "responsáveis",
-
-        "localizacao": "localização",
-
-        "autorizacao": "autorização",
-        "autorizacoes": "autorizações",
-
-        "condominio": "condomínio",
-        "condominios": "condomínios",
-
-
-        /* -----------------------------------------------------
-           ATENDIMENTO
-           ----------------------------------------------------- */
-
-        "atencao": "atenção",
-
-        "solicitacao": "solicitação",
-        "solicitacoes": "solicitações",
-
-        "informacao": "informação",
-        "informacoes": "informações",
-
-        "orientacao": "orientação",
-        "orientacoes": "orientações",
-
-        "confirmacao": "confirmação",
-        "confirmacoes": "confirmações",
-
-        "validacao": "validação",
-        "validacoes": "validações",
-
-        "verificacao": "verificação",
-        "verificacoes": "verificações",
-
-        "identificacao": "identificação",
-
-        "finalizacao": "finalização",
-
-        "normalizacao": "normalização",
-
-        "regularizacao": "regularização",
-
-        "situacao": "situação",
-        "situacoes": "situações",
-
-        "alteracao": "alteração",
-        "alteracoes": "alterações",
-
-        "atualizacao": "atualização",
-        "atualizacoes": "atualizações",
-
-        "comunicacao": "comunicação",
-
-        "interacao": "interação",
-        "interacoes": "interações",
-
-        "compreensao": "compreensão",
-
-        "disposicao": "disposição",
-
-        "preferencia": "preferência",
-
-        "previsao": "previsão",
-        "previsoes": "previsões",
-
-        "manha": "manhã",
-
-        "agradeco": "agradeço",
-
-        "protocolo": "protocolo",
-
-        "atendimento": "atendimento",
-
-        "agendamento": "agendamento",
-
-        "comparecimento": "comparecimento",
-
-        "deslocamento": "deslocamento",
-
-
-        /* -----------------------------------------------------
-           INTERNET / REDE
-           ----------------------------------------------------- */
-
-        "conexao": "conexão",
-        "conexoes": "conexões",
-
-        "desconexao": "desconexão",
-        "desconexoes": "desconexões",
-
-        "reconexao": "reconexão",
-
-        "oscilacao": "oscilação",
-        "oscilacoes": "oscilações",
-
-        "intermitencia": "intermitência",
-        "intermitencias": "intermitências",
-
-        "latencia": "latência",
-
-        "potencia": "potência",
-        "potencias": "potências",
-
-        "atenuacao": "atenuação",
-
-        "optico": "óptico",
-        "optica": "óptica",
-        "opticos": "ópticos",
-        "opticas": "ópticas",
-
-        "saturacao": "saturação",
-
-        "transmissao": "transmissão",
-
-        "televisao": "televisão",
-
-        "instalacao": "instalação",
-        "instalacoes": "instalações",
-
-        "manutencao": "manutenção",
-
-
-        /* -----------------------------------------------------
-           CONFIGURAÇÃO / SISTEMAS
-           ----------------------------------------------------- */
-
-        "configuracao": "configuração",
-        "configuracoes": "configurações",
-
-        "reconfiguracao": "reconfiguração",
-
-        "reinicializacao": "reinicialização",
-
-        "restauracao": "restauração",
-
-        "sincronizacao": "sincronização",
-
-        "autenticacao": "autenticação",
-
-        "aplicacao": "aplicação",
-        "aplicacoes": "aplicações",
-
-        "integracao": "integração",
-        "integracoes": "integrações",
-
-        "versao": "versão",
-        "versoes": "versões",
-
-        "notificacao": "notificação",
-        "notificacoes": "notificações",
-
-        "camera": "câmera",
-        "cameras": "câmeras",
-
-        "gravacao": "gravação",
-        "gravacoes": "gravações",
-
-        "visualizacao": "visualização",
-
-
-        /* -----------------------------------------------------
-           DIAGNÓSTICO
-           ----------------------------------------------------- */
-
-        "diagnostico": "diagnóstico",
-        "diagnosticos": "diagnósticos",
-
-        "analise": "análise",
-        "analises": "análises",
-
-        "solucao": "solução",
-        "solucoes": "soluções",
-
-        "resolucao": "resolução",
-
-        "estavel": "estável",
-
-        "indisponivel": "indisponível",
-
-        "inacessivel": "inacessível",
-
-        "acessivel": "acessível",
-
-        "lentidao": "lentidão",
-
-
-        /* -----------------------------------------------------
-           ERROS DE DIGITAÇÃO COMUNS
-           ----------------------------------------------------- */
-
-        "concerteza": "com certeza",
-        "comcerteza": "com certeza",
-
-        "derrepente": "de repente",
-        "derepente": "de repente",
-
-        "apartir": "a partir",
-
-        "porfavor": "por favor",
-
-        "denovo": "de novo",
-
-        "enchergar": "enxergar",
-
-        "excessao": "exceção",
-        "excessoes": "exceções",
-
-        "excecao": "exceção",
-        "excecoes": "exceções",
-
-        "conecao": "conexão",
-        "coneccao": "conexão",
-        "conexxao": "conexão",
-
-        "roteadro": "roteador",
-        "roteaor": "roteador",
-        "roteaodr": "roteador",
-
-        "internt": "internet",
-        "intenret": "internet",
-        "interent": "internet",
-        "internte": "internet",
-
-        "sianl": "sinal",
-        "siinal": "sinal",
-
-        "velociade": "velocidade",
-        "velocidae": "velocidade",
-
-        "instabilidae": "instabilidade",
-        "instabilidde": "instabilidade",
-
-        "reinicar": "reiniciar",
-        "reinciar": "reiniciar",
-        "reiniciaar": "reiniciar",
-
-        "verifcar": "verificar",
-        "verficar": "verificar",
-        "veriifcar": "verificar",
-
-        "verifquei": "verifiquei",
-        "verfiiquei": "verifiquei",
-
-        "realziar": "realizar",
-        "relaizar": "realizar",
-
-        "realziado": "realizado",
-        "realziada": "realizada",
-
-        "normalziado": "normalizado",
-        "normalziada": "normalizada",
-
-        "solucioando": "solucionado",
-        "solucioanda": "solucionada",
-
-        "configruacao": "configuração",
-        "configraucao": "configuração",
-
-        "atualziacao": "atualização",
-
-        "agendametno": "agendamento",
-        "agendamneto": "agendamento",
-
-        "disponiblidade": "disponibilidade",
-        "disponibildiade": "disponibilidade",
-
-        "necessairo": "necessário",
-        "necessairo": "necessário",
-
-        "informcao": "informação",
-        "inforamcao": "informação",
-
-        "orientaçao": "orientação",
-
-        "atendimetno": "atendimento",
-        "atendimneto": "atendimento",
-
-        "retornor": "retorno",
-
-        "clietne": "cliente",
-        "cliene": "cliente",
-
-        "residnecia": "residência",
-
-        "tecncio": "técnico",
-        "tecinco": "técnico",
-
-        "potecia": "potência",
-        "potenica": "potência",
-
-        "oscilcao": "oscilação",
-
-        "latenciaa": "latência",
-
-        "probelma": "problema",
-        "probelmas": "problemas",
-
-        "procediemnto": "procedimento",
-        "procedimetno": "procedimento",
-
-        "equipametno": "equipamento",
-
-        "dispositvo": "dispositivo",
-        "dispostivo": "dispositivo",
-
-        "retorono": "retorno",
-
-        "contaot": "contato",
-
-        "solictacao": "solicitação",
-        "solicitcao": "solicitação",
-
-        "validcao": "validação",
-
-        "verificcao": "verificação",
-
-        "normalizcao": "normalização",
-
-        "configrado": "configurado",
-        "configrada": "configurada",
-
-        "reinciado": "reiniciado",
-
-        "agendda": "agendada",
-        "agenddo": "agendado",
-
-        "horairo": "horário",
-        "horairo": "horário",
-
-        "perioddo": "período",
-
-        "enderecoo": "endereço"
-    };
-
-
-    /* =========================================================
-       PALAVRAS QUE NÃO DEVEM SER ALTERADAS
-       ========================================================= */
-
-    const IGNORAR = new Set([
-        "html",
-        "css",
-        "javascript",
-        "typescript",
-        "react",
-        "node",
-        "nodejs",
-        "json",
-        "xml",
-        "sql",
-        "ssh",
-        "ftp",
-        "sftp",
-        "smtp",
-        "imap",
-        "pop3",
-        "vlan",
-        "qos",
-        "mesh"
-    ]);
+    const MOTOR =
+        MOTOR_FACTORY.create(
+            {
+                dictionary:
+                    DICIONARIO,
+                personal:
+                    DICIONARIO_PESSOAL
+            }
+        );
 
 
     /* =========================================================
@@ -772,201 +307,6 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
 
 
     /* =========================================================
-       CAPITALIZAÇÃO
-       ========================================================= */
-
-    function preservarCapitalizacao(
-        original,
-        corrigida
-    ) {
-
-        /*
-         * Correção que contém espaços.
-         *
-         * Exemplo:
-         *
-         * Concerteza -> Com certeza
-         */
-        if (
-            original.length > 0 &&
-            original[0] ===
-                original[0].toUpperCase()
-        ) {
-
-            return (
-                corrigida
-                    .charAt(0)
-                    .toUpperCase() +
-                corrigida.slice(1)
-            );
-        }
-
-
-        if (
-            original.length > 1 &&
-            original ===
-                original.toUpperCase()
-        ) {
-
-            return corrigida
-                .toUpperCase();
-        }
-
-
-        return corrigida;
-    }
-
-
-    /* =========================================================
-       PROTEÇÃO DE DADOS TÉCNICOS
-       ========================================================= */
-
-    function limparPontuacaoToken(
-        token
-    ) {
-
-        return token.replace(
-            /^[("'[\]{]+|[)"'\]},;!?]+$/g,
-            ''
-        );
-    }
-
-
-    function tokenProtegido(
-        token
-    ) {
-
-        if (!token) {
-            return true;
-        }
-
-
-        const limpo =
-            limparPontuacaoToken(
-                token
-            );
-
-
-        const chave =
-            limpo.toLowerCase();
-
-
-        /*
-         * Se conhecemos a palavra,
-         * ela pode ser corrigida mesmo
-         * contendo número.
-         *
-         * Exemplo:
-         *
-         * ipv4
-         */
-        if (
-            Object.prototype
-                .hasOwnProperty.call(
-                    TERMOS_PADRAO,
-                    chave
-                ) ||
-            Object.prototype
-                .hasOwnProperty.call(
-                    CORRECOES,
-                    chave
-                )
-        ) {
-
-            return false;
-        }
-
-
-        /*
-         * URL
-         */
-        if (
-            /^https?:\/\//i.test(
-                limpo
-            ) ||
-            /^www\./i.test(
-                limpo
-            )
-        ) {
-
-            return true;
-        }
-
-
-        /*
-         * E-mail
-         */
-        if (
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-                limpo
-            )
-        ) {
-
-            return true;
-        }
-
-
-        /*
-         * IPv4
-         */
-        if (
-            /^(?:\d{1,3}\.){3}\d{1,3}$/.test(
-                limpo
-            )
-        ) {
-
-            return true;
-        }
-
-
-        /*
-         * MAC
-         */
-        if (
-            /^(?:[A-F0-9]{2}[:-]){5}[A-F0-9]{2}$/i.test(
-                limpo
-            )
-        ) {
-
-            return true;
-        }
-
-
-        /*
-         * Serial / modelo / firmware:
-         *
-         * EG8041X6-10
-         * V5R023C00S204
-         * YU111612678BR
-         */
-        if (
-            /(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9._/-]{4,}/.test(
-                limpo
-            )
-        ) {
-
-            return true;
-        }
-
-
-        /*
-         * Caminhos / domínios / códigos
-         */
-        if (
-            limpo.includes('\\') ||
-            limpo.includes('/') ||
-            limpo.startsWith('#')
-        ) {
-
-            return true;
-        }
-
-
-        return false;
-    }
-
-
-    /* =========================================================
        OBTÉM CORREÇÃO
        ========================================================= */
 
@@ -975,90 +315,9 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
         tokenCompleto = palavra
     ) {
 
-        if (!palavra) {
-            return null;
-        }
-
-
-        const chave =
-            palavra.toLowerCase();
-
-
-        /*
-         * Termos técnicos possuem
-         * capitalização fixa.
-         */
-        if (
-            Object.prototype
-                .hasOwnProperty.call(
-                    TERMOS_PADRAO,
-                    chave
-                )
-        ) {
-
-            const novo =
-                TERMOS_PADRAO[chave];
-
-
-            if (
-                palavra === novo
-            ) {
-
-                return null;
-            }
-
-
-            return novo;
-        }
-
-
-        if (
-            IGNORAR.has(
-                chave
-            )
-        ) {
-
-            return null;
-        }
-
-
-        if (
-            tokenProtegido(
-                tokenCompleto
-            )
-        ) {
-
-            return null;
-        }
-
-
-        if (
-            !Object.prototype
-                .hasOwnProperty.call(
-                    CORRECOES,
-                    chave
-                )
-        ) {
-
-            return null;
-        }
-
-
-        const corrigida =
-            CORRECOES[chave];
-
-
-        if (
-            palavra === corrigida
-        ) {
-
-            return null;
-        }
-
-
-        return preservarCapitalizacao(
+        return MOTOR.correctWord(
             palavra,
-            corrigida
+            tokenCompleto
         );
     }
 
@@ -1122,128 +381,13 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
         texto
     ) {
 
-        if (
-            !texto
-        ) {
-
-            return texto;
-        }
-
-
-        /*
-         * Letras + números.
-         *
-         * Permite:
-         *
-         * ipv4
-         * wifi
-         * conexao
-         */
-        texto =
-            texto.replace(
-                /[\p{L}\p{N}][\p{L}\p{N}\p{M}-]*/gu,
-
-                function (
-                    palavra,
-                    offset
-                ) {
-
-                    const token =
-                        tokenAoRedor(
-                            texto,
-                            offset,
-                            offset +
-                                palavra.length
-                        );
-
-
-                    const correcao =
-                        obterCorrecao(
-                            palavra,
-                            token
-                        );
-
-
-                    return correcao ||
-                        palavra;
-                }
-            );
-
-
-        if (
-            CONFIG.normalizarPontuacao
-        ) {
-
-            texto =
-                normalizarPontuacao(
-                    texto
-                );
-        }
-
-
-        return texto;
-    }
-
-
-    /* =========================================================
-       NORMALIZA PONTUAÇÃO
-       ========================================================= */
-
-    function normalizarPontuacao(
-        texto
-    ) {
-
-        /*
-         * Remove espaço antes de:
-         *
-         * , . ; ! ?
-         *
-         * "Olá , tudo bem ?"
-         *
-         * ->
-         *
-         * "Olá, tudo bem?"
-         */
-        texto =
-            texto.replace(
-                /[ \t]+([,.;!?])/g,
-                '$1'
-            );
-
-
-        /*
-         * Adiciona espaço depois de:
-         *
-         * vírgula
-         * ;
-         * !
-         * ?
-         *
-         * apenas quando o próximo
-         * caractere for uma letra.
-         *
-         * Evitamos mexer em "." para não
-         * danificar domínios/IPs.
-         */
-        texto =
-            texto.replace(
-                /([,;!?])(?=\p{L})/gu,
-                '$1 '
-            );
-
-
-        /*
-         * Remove espaço sobrando
-         * antes de quebra de linha.
-         */
-        texto =
-            texto.replace(
-                /[ \t]+\n/g,
-                '\n'
-            );
-
-
-        return texto;
+        return MOTOR.correctText(
+            texto,
+            {
+                normalizePunctuation:
+                    CONFIG.normalizarPontuacao
+            }
+        );
     }
 
 
@@ -2323,58 +1467,50 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
         campo
     ) {
 
-        const texto =
-            textoDoCampo(
-                campo
+        const sugestoes =
+            MOTOR.contextualSuggestions(
+                textoDoCampo(
+                    campo
+                )
             );
 
-
-        /*
-         * Não corrigimos automaticamente
-         * essas situações porque dependem
-         * de contexto.
-         */
 
         if (
-            /\bagente\b/i.test(
-                texto
-            )
+            sugestoes.length ===
+                0
         ) {
-
-            setTimeout(
-                () => {
-
-                    mostrarToast(
-                        '⚠ Revise “agente”: se significar “nós”, use “a gente”.',
-                        3500
-                    );
-
-                },
-                500
-            );
 
             return;
         }
 
 
-        if (
-            /\besta\b/i.test(
-                texto
-            )
-        ) {
-
-            setTimeout(
-                () => {
-
-                    mostrarToast(
-                        '⚠ Revise “esta”: pode ser “esta” ou “está”, dependendo da frase.',
-                        3500
-                    );
-
-                },
-                500
+        const limite =
+            sugestoes.slice(
+                0,
+                2
             );
-        }
+
+
+        const complemento =
+            sugestoes.length >
+                limite.length
+                ?
+                ` • +${sugestoes.length - limite.length} ponto(s) para revisar`
+                :
+                '';
+
+
+        setTimeout(
+            () => {
+
+                mostrarToast(
+                    `⚠ ${limite.join(' • ')}${complemento}`,
+                    6000
+                );
+
+            },
+            350
+        );
     }
 
 
@@ -2517,20 +1653,31 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
 
         console.log(
             '[Way AutoCorrect PRO]',
-            Object.keys(
-                CORRECOES
-            ).length,
+            MOTOR.counts.corrections,
             'correções ortográficas.'
         );
 
 
         console.log(
             '[Way AutoCorrect PRO]',
-            Object.keys(
-                TERMOS_PADRAO
-            ).length,
+            MOTOR.counts.terms,
             'termos técnicos padronizados.'
         );
+
+
+        if (
+            MOTOR.counts
+                .personalCorrections >
+                0
+        ) {
+
+            console.log(
+                '[Way AutoCorrect PRO]',
+                MOTOR.counts
+                    .personalCorrections,
+                'correções pessoais carregadas.'
+            );
+        }
 
 
         console.log(
