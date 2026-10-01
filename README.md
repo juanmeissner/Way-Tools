@@ -2,6 +2,8 @@
 
 Extensão Chrome Manifest V3 com ferramentas internas predefinidas. Ela inclui **Mensagens Personalizadas v3.5**, com as 16 mensagens fornecidas no backup JSON, alertas de inatividade e notificações de novas mensagens; **ERP — Copiar Dados v1.6**; **Interface Compacta v3.4 + Temas v1.2 para Matrix e ERP**; **Matrix — Corrigir Colagem v3.5**; e **Corretor Ortográfico PRO v3.2** para ChatWoot, Matrix e ERP, incluindo o editor ProseMirror do chat.
 
+Por padrão, **Interface Compacta + Temas** e **Matrix — Corrigir Colagem** iniciam desativados. O usuário pode ativá-los individualmente pelo painel do Way Tools, e essa escolha fica preservada no navegador.
+
 O modo escuro do ERP inclui uma camada adaptativa para telas e modais carregados dinamicamente. Ela corrige superfícies claras, textos escuros e bordas incompatíveis, preservando as cores funcionais de alertas, estados e ações.
 
 O Corretor Ortográfico PRO possui mais de 500 correções seguras, termos padronizados de atendimento, redes e telecom, proteção de URLs, e-mails, IPs e códigos, alertas para palavras ambíguas e um dicionário pessoal armazenado somente no navegador.
@@ -22,7 +24,7 @@ As notificações diferenciam mensagens recebidas do cliente das mensagens envia
 
 Cada aviso usa somente o nome do cliente como título e exibe a prévia da mensagem logo abaixo.
 
-Na tela **Alertas de inatividade** do ChatWoot, cada nível pode gerar uma notificação própria quando o atendimento entrar em 🟡 Atenção, 🟠 Atenção elevada ou 🔴 Crítico. As três opções são independentes, vêm desativadas por padrão e usam os limites em minutos definidos pelo usuário.
+Na tela **Alertas de inatividade** do ChatWoot, cada nível gera uma notificação própria quando o atendimento entra em 🟡 Atenção aos 2 minutos, 🟠 Atenção elevada aos 5 minutos ou 🔴 Crítico aos 10 minutos. As três opções vêm ativadas por padrão, podem ser configuradas de forma independente e continuam respeitando qualquer escolha já salva pelo usuário.
 
 A soma de não lidas no título da aba e as notificações de novas mensagens ou inatividade consideram somente as conversas exibidas na aba **Minhas**. As demais abas do ChatWoot são ignoradas para notificações.
 
@@ -69,14 +71,14 @@ npm test
 npm run package
 ```
 
-O pacote é criado em `release/way-tools-v0.6.6.zip`.
+O pacote é criado em `release/way-tools-v0.6.7.zip`.
 
 ## Antes de publicar
 
 1. Teste a extensão no Chrome com **Carregar sem compactação** e confirme o funcionamento dentro do sistema autenticado.
 2. Se a publicação exigir a vinculação ao domínio da organização, verifique a propriedade do site no Google Search Console.
 3. No Painel do desenvolvedor da Chrome Web Store, escolha a visibilidade adequada: pública, não listada, particular ou por grupos.
-4. Envie `release/way-tools-v0.6.6.zip` para a Chrome Web Store.
+4. Envie `release/way-tools-v0.6.7.zip` para a Chrome Web Store.
 5. Para distribuição corporativa, configure a instalação e as permissões no Google Admin Console ou por Política de Grupo do Windows.
 
 A publicação e as políticas administrativas exigem acesso às contas da organização e não são realizadas automaticamente pelo projeto.

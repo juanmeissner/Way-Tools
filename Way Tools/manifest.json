@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Way Tools",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "Ferramentas da Internet Way prontas para uso no navegador.",
   "minimum_chrome_version": "109",
   "permissions": [

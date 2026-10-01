@@ -121,6 +121,16 @@ assert.deepEqual(
   ]
 );
 assert.ok(Object.isFrozen(catalogContext.WAY_TOOLS_SCRIPTS), "O catálogo de scripts precisa ser imutável.");
+assert.equal(
+  catalogContext.WAY_TOOLS_SCRIPTS.find((script) => script.id === "way-interface-compacta").defaultEnabled,
+  false,
+  "Interface Compacta + Temas precisa iniciar desativado por padrão."
+);
+assert.equal(
+  catalogContext.WAY_TOOLS_SCRIPTS.find((script) => script.id === "matrix-corrigir-colagem").defaultEnabled,
+  false,
+  "Matrix — Corrigir Colagem precisa iniciar desativado por padrão."
+);
 assert.match(runtimeSource, /onValueChanged\(key, callback\)/);
 assert.match(runtimeSource, /chrome\.storage\.onChanged\.addListener\(listener\)/);
 assert.match(runtimeSource, /snapshot\[namespacedKey\]\s*=\s*change\.newValue/);
@@ -138,9 +148,15 @@ assert.match(scriptSource, /const cardsParaNotificacoes\s*=/);
 assert.match(scriptSource, /atualizarTituloMensagensNaoLidas\(\s*cardsParaNotificacoes\s*\)/);
 assert.match(scriptSource, /monitorarNovasMensagens\(\s*cardsParaNotificacoes\s*\)/);
 assert.match(scriptSource, /const ESTADO_NOTIFICACOES_INATIVIDADE/);
-assert.match(scriptSource, /notificarAmarelo:\s*false/);
-assert.match(scriptSource, /notificarLaranja:\s*false/);
-assert.match(scriptSource, /notificarVermelho:\s*false/);
+assert.match(scriptSource, /amarelo:\s*2/);
+assert.match(scriptSource, /laranja:\s*5/);
+assert.match(scriptSource, /vermelho:\s*10/);
+assert.match(scriptSource, /notificarAmarelo:\s*true/);
+assert.match(scriptSource, /notificarLaranja:\s*true/);
+assert.match(scriptSource, /notificarVermelho:\s*true/);
+assert.match(scriptSource, /padrao\.notificarAmarelo/);
+assert.match(scriptSource, /padrao\.notificarLaranja/);
+assert.match(scriptSource, /padrao\.notificarVermelho/);
 assert.match(scriptSource, /name="notificarAmarelo"/);
 assert.match(scriptSource, /name="notificarLaranja"/);
 assert.match(scriptSource, /name="notificarVermelho"/);

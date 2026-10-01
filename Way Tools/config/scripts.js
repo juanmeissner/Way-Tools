@@ -27,7 +27,7 @@
         "https://wayinternet.matrixdobrasil.ai/*",
         "https://erp.internetway.com.br/*"
       ]),
-      defaultEnabled: true
+      defaultEnabled: false
     }),
     Object.freeze({
       id: "matrix-corrigir-colagem",
@@ -35,7 +35,7 @@
       version: "3.5",
       description: "Preserva quebras de linha, negrito e a colagem nativa de imagens no Matrix.",
       matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
-      defaultEnabled: true
+      defaultEnabled: false
     }),
     Object.freeze({
       id: "way-corretor-ortografico-pro",

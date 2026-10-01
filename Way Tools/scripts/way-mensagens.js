@@ -52,9 +52,9 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
         amarelo: 2,
         laranja: 5,
         vermelho: 10,
-        notificarAmarelo: false,
-        notificarLaranja: false,
-        notificarVermelho: false
+        notificarAmarelo: true,
+        notificarLaranja: true,
+        notificarVermelho: true
     };
 
 
@@ -566,15 +566,30 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
             notificarAmarelo:
                 origem.notificarAmarelo ===
-                true,
+                undefined
+                    ?
+                    padrao.notificarAmarelo
+                    :
+                    origem.notificarAmarelo ===
+                    true,
 
             notificarLaranja:
                 origem.notificarLaranja ===
-                true,
+                undefined
+                    ?
+                    padrao.notificarLaranja
+                    :
+                    origem.notificarLaranja ===
+                    true,
 
             notificarVermelho:
                 origem.notificarVermelho ===
-                true,
+                undefined
+                    ?
+                    padrao.notificarVermelho
+                    :
+                    origem.notificarVermelho ===
+                    true,
 
             amarelo:
                 Number.isInteger(
