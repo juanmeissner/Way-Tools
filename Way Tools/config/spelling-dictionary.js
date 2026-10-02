@@ -110,7 +110,6 @@
     "ACS": ["acs"],
     "SMS": ["sms"],
     "Way": ["way"],
-    "Matrix": ["matrix"],
     "ChatWoot": ["chatwoot", "nocodb"],
     "Huawei": ["huawei"],
     "Intelbras": ["intelbras"],

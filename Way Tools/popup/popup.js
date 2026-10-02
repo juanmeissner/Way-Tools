@@ -25,6 +25,12 @@
   const notificationWhenFocused = document.querySelector("#notification-when-focused");
   const notificationWhenFocusedDescription = document.querySelector("#notification-when-focused-description");
   const notificationSettingsStatus = document.querySelector("#notification-settings-status");
+  const tabButtons = [...document.querySelectorAll("[data-tab-target]")];
+  const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
+  const compatibleScriptsList = document.querySelector("#compatible-scripts-list");
+  const compatibleCount = document.querySelector("#compatible-count");
+  const openToolsButton = document.querySelector("#open-tools");
+  const openSettingsButton = document.querySelector("#open-settings");
 
   const personalDictionaryStorageKey =
     "wayTools.data.way-corretor-ortografico-pro.way-corretor-dicionario-pessoal-v1";
@@ -47,6 +53,8 @@
 
   let activeTabId = null;
   let activeUrl = "";
+  let compatibleScripts = [];
+  const scriptEnabledState = new Map();
   let personalDictionary = {
     corrections: {},
     ignored: []
@@ -56,6 +64,33 @@
 
   function enabledKey(scriptId) {
     return `wayTools.scripts.${scriptId}.enabled`;
+  }
+
+  function activateTab(tabName, focusTab = false) {
+    const selectedButton = tabButtons.find((button) => button.dataset.tabTarget === tabName);
+
+    if (!selectedButton) {
+      return;
+    }
+
+    for (const button of tabButtons) {
+      const selected = button === selectedButton;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+
+    for (const panel of tabPanels) {
+      const selected = panel.dataset.tabPanel === tabName;
+      panel.classList.toggle("active", selected);
+      panel.hidden = !selected;
+    }
+
+    document.querySelector("main")?.scrollTo({ top: 0, behavior: "auto" });
+
+    if (focusTab) {
+      selectedButton.focus();
+    }
   }
 
   function normalizeNotificationDuration(value) {
@@ -112,9 +147,33 @@
     }
   }
 
+  function getScriptPlatform(script) {
+    const matches = script.matches.join(" ");
+
+    if (matches.includes("ia-nocodb.internetway.com.br")) {
+      return { id: "chatwoot", label: "ChatWoot" };
+    }
+
+    if (matches.includes("erp.internetway.com.br")) {
+      return { id: "erp", label: "ERP Way" };
+    }
+
+    if (matches.includes("wayinternet.matrixdobrasil.ai")) {
+      return { id: "matrix", label: "Matrix" };
+    }
+
+    return { id: "general", label: "Geral" };
+  }
+
+  function updateScriptVisualState(article, state, enabled) {
+    article.classList.toggle("disabled", !enabled);
+    state.textContent = enabled ? "Ativo" : "Desativado";
+  }
+
   function createScriptCard(script, enabled) {
     const article = document.createElement("article");
     article.className = `script-card${enabled ? "" : " disabled"}`;
+    article.dataset.scriptId = script.id;
 
     const top = document.createElement("div");
     top.className = "script-card-top";
@@ -123,7 +182,7 @@
     const titleRow = document.createElement("div");
     titleRow.className = "script-title-row";
 
-    const title = document.createElement("h2");
+    const title = document.createElement("h3");
     title.textContent = script.name;
 
     const version = document.createElement("span");
@@ -131,7 +190,27 @@
     version.textContent = `v${script.version}`;
 
     titleRow.append(title, version);
-    content.append(titleRow);
+
+    if (script.badge) {
+      const badge = document.createElement("span");
+      badge.className = "script-badge";
+      badge.textContent = script.badge;
+      titleRow.append(badge);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "script-meta";
+
+    const platform = getScriptPlatform(script);
+    const platformBadge = document.createElement("span");
+    platformBadge.className = `platform-badge ${platform.id}`;
+    platformBadge.textContent = platform.label;
+
+    const state = document.createElement("span");
+    state.className = "script-state";
+
+    meta.append(platformBadge, state);
+    content.append(titleRow, meta);
 
     const toggleLabel = document.createElement("label");
     toggleLabel.className = "switch";
@@ -147,6 +226,12 @@
     toggleLabel.append(toggle, track);
     top.append(content, toggleLabel);
 
+    const details = document.createElement("details");
+    details.className = "script-details";
+
+    const summary = document.createElement("summary");
+    summary.textContent = "Ver detalhes";
+
     const description = document.createElement("p");
     description.textContent = script.description;
 
@@ -154,14 +239,98 @@
     site.className = "script-site";
     site.textContent = getDisplayHost(script.matches[0]);
 
+    details.append(summary, description, site);
+
     toggle.addEventListener("change", async () => {
       await chrome.storage.local.set({ [enabledKey(script.id)]: toggle.checked });
-      article.classList.toggle("disabled", !toggle.checked);
+      scriptEnabledState.set(script.id, toggle.checked);
+      updateScriptVisualState(article, state, toggle.checked);
+      renderCompatibleScripts();
       changeNote.hidden = false;
     });
 
-    article.append(top, description, site);
+    updateScriptVisualState(article, state, enabled);
+    article.append(top, details);
     return article;
+  }
+
+  function createScriptGroup(platform, groupScripts) {
+    const section = document.createElement("section");
+    section.className = "script-group";
+
+    const heading = document.createElement("div");
+    heading.className = "script-group-heading";
+
+    const title = document.createElement("span");
+    title.textContent = platform.label;
+
+    const count = document.createElement("span");
+    count.textContent = `${groupScripts.length} recurso${groupScripts.length === 1 ? "" : "s"}`;
+
+    const items = document.createElement("div");
+    items.className = "script-group-items";
+    items.append(
+      ...groupScripts.map((script) =>
+        createScriptCard(script, scriptEnabledState.get(script.id) === true)
+      )
+    );
+
+    heading.append(title, count);
+    section.append(heading, items);
+    return section;
+  }
+
+  function focusScriptCard(scriptId) {
+    activateTab("tools");
+    const article = scriptsList.querySelector(`[data-script-id="${CSS.escape(scriptId)}"]`);
+
+    if (!article) {
+      return;
+    }
+
+    article.scrollIntoView({ behavior: "smooth", block: "center" });
+    article.classList.add("highlight");
+    window.setTimeout(() => article.classList.remove("highlight"), 1100);
+  }
+
+  function renderCompatibleScripts() {
+    compatibleCount.textContent = String(compatibleScripts.length);
+
+    if (compatibleScripts.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "compatible-empty";
+      empty.textContent = "Nenhuma ferramenta é executada neste endereço. Abra o ChatWoot, o ERP Way ou o Matrix.";
+      compatibleScriptsList.replaceChildren(empty);
+      return;
+    }
+
+    compatibleScriptsList.replaceChildren(
+      ...compatibleScripts.map((script) => {
+        const item = document.createElement("div");
+        item.className = "compatible-item";
+
+        const copy = document.createElement("div");
+        copy.className = "compatible-copy";
+
+        const name = document.createElement("strong");
+        name.textContent = script.name;
+
+        const enabled = scriptEnabledState.get(script.id) === true;
+        const state = document.createElement("small");
+        state.className = enabled ? "" : "off";
+        state.textContent = enabled ? "● Ativo nesta página" : "○ Desativado";
+
+        const manage = document.createElement("button");
+        manage.type = "button";
+        manage.className = "compatible-manage";
+        manage.textContent = "Gerenciar";
+        manage.addEventListener("click", () => focusScriptCard(script.id));
+
+        copy.append(name, state);
+        item.append(copy, manage);
+        return item;
+      })
+    );
   }
 
   function normalizePersonalWord(value) {
@@ -281,10 +450,23 @@
     );
     const stored = await chrome.storage.local.get(defaults);
 
-    scriptsList.replaceChildren(
-      ...scripts.map((script) => createScriptCard(script, stored[enabledKey(script.id)] === true))
-    );
+    for (const script of scripts) {
+      scriptEnabledState.set(script.id, stored[enabledKey(script.id)] === true);
+    }
+
+    const platformOrder = ["chatwoot", "erp", "matrix", "general"];
+    const groups = platformOrder
+      .map((platformId) => {
+        const groupScripts = scripts.filter((script) => getScriptPlatform(script).id === platformId);
+        return groupScripts.length > 0
+          ? createScriptGroup(getScriptPlatform(groupScripts[0]), groupScripts)
+          : null;
+      })
+      .filter(Boolean);
+
+    scriptsList.replaceChildren(...groups);
     scriptCount.textContent = String(scripts.length);
+    renderCompatibleScripts();
   }
 
   async function inspectActiveTab() {
@@ -298,12 +480,13 @@
 
     activeTabId = tab.id;
     activeUrl = tab.url || "";
-    const compatibleScripts = scripts.filter((script) => scriptMatchesUrl(script, activeUrl));
+    compatibleScripts = scripts.filter((script) => scriptMatchesUrl(script, activeUrl));
+    renderCompatibleScripts();
 
     if (compatibleScripts.length > 0) {
       pageStatus.classList.add("compatible");
       pageStatusTitle.textContent = "Way Tools disponível nesta página";
-      pageStatusDescription.textContent = `${compatibleScripts.length} script${compatibleScripts.length === 1 ? "" : "s"} compatível${compatibleScripts.length === 1 ? "" : "is"}.`;
+      pageStatusDescription.textContent = `${compatibleScripts.length} ${compatibleScripts.length === 1 ? "script compatível" : "scripts compatíveis"}.`;
       reloadButton.disabled = false;
       return;
     }
@@ -363,6 +546,33 @@
     commandsList.replaceChildren(...buttons);
     pageCommands.hidden = false;
   }
+
+  for (const [index, button] of tabButtons.entries()) {
+    button.addEventListener("click", () => activateTab(button.dataset.tabTarget));
+    button.addEventListener("keydown", (event) => {
+      let nextIndex = null;
+
+      if (event.key === "ArrowRight") {
+        nextIndex = (index + 1) % tabButtons.length;
+      } else if (event.key === "ArrowLeft") {
+        nextIndex = (index - 1 + tabButtons.length) % tabButtons.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = tabButtons.length - 1;
+      }
+
+      if (nextIndex === null) {
+        return;
+      }
+
+      event.preventDefault();
+      activateTab(tabButtons[nextIndex].dataset.tabTarget, true);
+    });
+  }
+
+  openToolsButton.addEventListener("click", () => activateTab("tools", true));
+  openSettingsButton.addEventListener("click", () => activateTab("settings", true));
 
   reloadButton.addEventListener("click", async () => {
     if (activeTabId === null || !activeUrl) {
@@ -467,6 +677,7 @@
     await renderPageCommands();
   }
 
+  activateTab("home");
   initialize().catch((error) => {
       console.error("[Way Tools] Falha ao abrir o painel:", error);
       pageStatusTitle.textContent = "Não foi possível carregar o painel";

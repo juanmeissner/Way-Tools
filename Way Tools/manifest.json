@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Way Tools",
-  "version": "0.6.7",
+  "version": "0.6.9",
   "description": "Ferramentas da Internet Way prontas para uso no navegador.",
-  "minimum_chrome_version": "109",
+  "minimum_chrome_version": "120",
   "permissions": [
     "storage",
     "notifications",
@@ -33,7 +33,27 @@
     "48": "icons/icon-48.png",
     "128": "128.png"
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "128.png"
+      ],
+      "matches": [
+        "https://wayinternet.matrixdobrasil.ai/*"
+      ]
+    }
+  ],
   "content_scripts": [
+    {
+      "matches": [
+        "https://ia-nocodb.internetway.com.br/*"
+      ],
+      "js": [
+        "content/chatwoot-realtime-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": [
         "https://ia-nocodb.internetway.com.br/*"
@@ -60,7 +80,9 @@
         "content/runtime.js",
         "content/spelling-engine.js",
         "scripts/way-erp-copiar-dados.js",
+        "scripts/way-erp-gerador-relato.js",
         "scripts/way-interface-compacta.js",
+        "scripts/way-erp-temas.js",
         "scripts/way-corretor-ortografico-pro.js"
       ],
       "all_frames": true,
@@ -72,12 +94,15 @@
         "https://wayinternet.matrixdobrasil.ai/*"
       ],
       "js": [
+        "config/default-messages.js",
         "config/scripts.js",
         "config/spelling-dictionary.js",
         "content/runtime.js",
         "content/spelling-engine.js",
+        "scripts/matrix-mensagens.js",
+        "scripts/matrix-interface-compacta.js",
+        "scripts/matrix-temas.js",
         "scripts/matrix-corrigir-colagem.js",
-        "scripts/way-interface-compacta.js",
         "scripts/way-corretor-ortografico-pro.js"
       ],
       "run_at": "document_start"

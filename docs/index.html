@@ -309,7 +309,7 @@
           Esta política explica como a extensão Way Tools trata informações durante o uso de suas
           ferramentas nos sistemas compatíveis.
         </p>
-        <span class="updated">Última atualização: 30 de setembro de 2026</span>
+        <span class="updated">Última atualização: 2 de outubro de 2026</span>
       </div>
     </header>
 
@@ -347,7 +347,6 @@
         <ul>
           <li><code>https://ia-nocodb.internetway.com.br/*</code></li>
           <li><code>https://erp.internetway.com.br/*</code></li>
-          <li><code>https://wayinternet.matrixdobrasil.ai/*</code></li>
         </ul>
       </section>
 
@@ -409,7 +408,11 @@
 
         <p>
           A extensão não trata intencionalmente informações de saúde, dados financeiros ou de
-          pagamento, credenciais de autenticação ou histórico geral de navegação.
+          pagamento, senhas, códigos PIN ou histórico geral de navegação. Para consultar no próprio
+          ChatWoot a lista de conversas atribuídas, a ponte local pode reutilizar temporariamente os
+          cabeçalhos técnicos de uma solicitação autenticada que a página já realizou. Esses
+          cabeçalhos permanecem somente na memória da própria página, não são copiados para o
+          armazenamento da extensão e não são enviados ao desenvolvedor ou a terceiros.
         </p>
       </section>
 
@@ -423,6 +426,7 @@
           <li>preencher e manter temporariamente rascunhos de visitas técnicas;</li>
           <li>calcular e apresentar alertas de inatividade;</li>
           <li>exibir notificações locais de novas mensagens e níveis de inatividade;</li>
+          <li>acompanhar localmente eventos em tempo real e conversas atribuídas ao usuário no ChatWoot;</li>
           <li>adaptar a interface e o tema dos sistemas compatíveis;</li>
           <li>salvar preferências e configurações escolhidas pelo usuário.</li>
         </ul>
@@ -449,6 +453,13 @@
             da conversa podem ser mantidos no <code>chrome.storage.session</code> para abrir o
             atendimento quando o usuário clicar na notificação. Esses dados permanecem somente
             durante a sessão do navegador.
+          </li>
+          <li>
+            <strong>Estado temporário dos alertas:</strong> identificador da conversa, nome do cliente,
+            prévia da última mensagem, horário da última atividade e níveis já avisados podem ser
+            mantidos no <code>chrome.storage.session</code>. Isso permite agendar e deduplicar os
+            alertas de inatividade mesmo fora da tela de conversas. O estado é limitado à sessão do
+            navegador e removido quando a conversa deixa de estar atribuída ao usuário.
           </li>
           <li>
             <strong>Área de transferência:</strong> informações somente são copiadas quando o
@@ -493,7 +504,8 @@
         </p>
         <h3><code>alarms</code></h3>
         <p>
-          Usada para encerrar notificações temporárias de acordo com a duração escolhida pelo usuário.
+          Usada para encerrar notificações temporárias de acordo com a duração escolhida pelo usuário
+          e para disparar os níveis de inatividade configurados para conversas atribuídas.
         </p>
         <h3>Permissões dos hosts compatíveis</h3>
         <p>

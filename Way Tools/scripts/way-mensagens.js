@@ -1,5 +1,5 @@
 /*
- * Way Tools - Mensagens Personalizadas v3.5
+ * Way Tools - Mensagens Personalizadas v3.7
  * Adaptado do userscript fornecido para o runtime nativo da extensão.
  */
 
@@ -11,7 +11,7 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
 // ==UserScript==
 // @name         Way - Mensagens Personalizadas
 // @namespace    way-mensagens-personalizadas
-// @version      3.5
+// @version      3.7
 // @description  Mensagens personalizadas com dados do cliente, tags globais, autocomplete, visita técnica, alertas de inatividade, notificações de novas mensagens e backup JSON
 // @match        https://ia-nocodb.internetway.com.br/*
 // @run-at       document-start
@@ -47,6 +47,10 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
     };
 
 
+    const SHARED_MESSAGES_KEY =
+        'messages.catalog.v1';
+
+
     const ALERTAS_INATIVIDADE_PADRAO = {
         ativo: true,
         amarelo: 2,
@@ -75,6 +79,22 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
         'wayTools.notifications.whenFocused';
 
 
+    const CHATWOOT_REALTIME_SOURCE =
+        'way-tools-chatwoot-realtime';
+
+
+    const CHATWOOT_COMMAND_SOURCE =
+        'way-tools-chatwoot-command';
+
+
+    const TIPO_SINCRONIZAR_INATIVIDADE =
+        'wayTools:syncChatwootInactivity';
+
+
+    const TIPO_CANCELAR_INATIVIDADE =
+        'wayTools:cancelChatwootInactivity';
+
+
     const PREFERENCIAS_NOTIFICACOES = {
         notificarEmPrimeiroPlano: false
     };
@@ -89,6 +109,20 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
     const ESTADO_NOTIFICACOES_INATIVIDADE = {
         inicioAquecimento: 0,
         duracaoAquecimento: 5000,
+        conversas: new Map()
+    };
+
+
+    const ESTADO_CONVERSAS_MINHAS = {
+        chaves: new Set(),
+        atualizadoEm: 0
+    };
+
+
+    const ESTADO_CHATWOOT_REALTIME = {
+        ativo: false,
+        accountId: obterAccountIdPelaUrlAtual(),
+        userId: null,
         conversas: new Map()
     };
 
@@ -115,6 +149,38 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
             icone: '🔴'
         }
     });
+
+
+    function obterAccountIdPelaUrlAtual() {
+        try {
+            const caminho =
+                new URL(
+                    window.location.href
+                ).pathname;
+
+
+            const accountId =
+                Number(
+                    caminho.match(
+                        /\/(?:app\/)?accounts\/(\d+)/
+                    )?.[1]
+                );
+
+
+            return Number.isInteger(
+                accountId
+            ) &&
+            accountId >
+                0
+                ?
+                accountId
+                :
+                null;
+
+        } catch {
+            return null;
+        }
+    }
 
 
     /* =========================================================
@@ -373,6 +439,10 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         mensagens: [],
         indice: 0
     };
+
+
+    const ENTER_COMANDO_BLOQUEADO =
+        new WeakMap();
 
 
     /* =========================================================
@@ -1941,6 +2011,94 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     }
 
 
+    function obterCardsConversasMinhas(
+        cards,
+        abaMinhasAtiva
+    ) {
+        if (
+            !Array.isArray(
+                cards
+            )
+        ) {
+            return [];
+        }
+
+
+        const registros =
+            cards.map(
+                card => {
+                    const nomeCliente =
+                        extrairNomeClienteCardConversa(
+                            card
+                        );
+
+
+                    return {
+                        card,
+                        chave:
+                            obterChaveConversaCard(
+                                card,
+                                nomeCliente
+                            )
+                    };
+                }
+            );
+
+
+        if (
+            abaMinhasAtiva
+        ) {
+            ESTADO_CONVERSAS_MINHAS
+                .chaves =
+                    new Set(
+                        registros
+                            .map(
+                                registro =>
+                                    registro.chave
+                            )
+                            .filter(
+                                chave =>
+                                    chave &&
+                                    !chave.startsWith(
+                                        'element:'
+                                    )
+                            )
+                    );
+
+
+            ESTADO_CONVERSAS_MINHAS
+                .atualizadoEm =
+                    Date.now();
+
+
+            return cards;
+        }
+
+
+        if (
+            ESTADO_CONVERSAS_MINHAS
+                .chaves.size ===
+                0
+        ) {
+            return [];
+        }
+
+
+        return registros
+            .filter(
+                registro =>
+                    ESTADO_CONVERSAS_MINHAS
+                        .chaves.has(
+                            registro.chave
+                        )
+            )
+            .map(
+                registro =>
+                    registro.card
+            );
+    }
+
+
     function enviarNotificacaoNovaMensagem(
         dados
     ) {
@@ -2004,6 +2162,791 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     }
 
 
+    function normalizarTimestampMilissegundos(
+        valor
+    ) {
+        const numero =
+            Number(
+                valor
+            );
+
+
+        if (
+            !Number.isFinite(
+                numero
+            ) ||
+            numero <=
+                0
+        ) {
+            return 0;
+        }
+
+
+        return numero <
+            1_000_000_000_000
+                ?
+                numero * 1000
+                :
+                numero;
+    }
+
+
+    function conversaPertenceAoUsuarioAtual(
+        dados
+    ) {
+        const usuarioAtual =
+            Number(
+                ESTADO_CHATWOOT_REALTIME
+                    .userId
+            );
+
+
+        const responsavel =
+            Number(
+                dados?.assigneeId
+            );
+
+
+        const tipoResponsavel =
+            normalizarEspacos(
+                dados?.assigneeType
+            )
+                .toLocaleLowerCase(
+                    'pt-BR'
+                );
+
+
+        return Number.isInteger(
+            usuarioAtual
+        ) &&
+        usuarioAtual >
+            0 &&
+        Number.isInteger(
+            responsavel
+        ) &&
+        responsavel >
+            0 &&
+        usuarioAtual ===
+            responsavel &&
+        (
+            !tipoResponsavel ||
+            tipoResponsavel ===
+                'user'
+        );
+    }
+
+
+    function configuracaoInatividadeParaBackground() {
+        const configuracao =
+            carregarConfiguracaoAlertasInatividade();
+
+
+        return {
+            yellow: {
+                minutes:
+                    configuracao.amarelo,
+
+                enabled:
+                    configuracao.notificarAmarelo ===
+                    true
+            },
+
+            orange: {
+                minutes:
+                    configuracao.laranja,
+
+                enabled:
+                    configuracao.notificarLaranja ===
+                    true
+            },
+
+            red: {
+                minutes:
+                    configuracao.vermelho,
+
+                enabled:
+                    configuracao.notificarVermelho ===
+                    true
+            }
+        };
+    }
+
+
+    function enviarMensagemBackground(
+        mensagem
+    ) {
+        try {
+            chrome.runtime.sendMessage(
+                mensagem,
+                resposta => {
+                    const erro =
+                        chrome.runtime.lastError;
+
+
+                    if (
+                        erro
+                    ) {
+                        console.warn(
+                            '[Way Mensagens] Falha na sincronização em segundo plano:',
+                            erro.message
+                        );
+
+                        return;
+                    }
+
+
+                    if (
+                        resposta?.ok ===
+                        false
+                    ) {
+                        console.warn(
+                            '[Way Mensagens] Sincronização em segundo plano recusada:',
+                            resposta.error
+                        );
+                    }
+                }
+            );
+
+        } catch (erro) {
+            console.warn(
+                '[Way Mensagens] Não foi possível sincronizar a conversa:',
+                erro
+            );
+        }
+    }
+
+
+    function cancelarMonitoramentoRealtime(
+        conversationId,
+        accountIdInformado =
+            null
+    ) {
+        const id =
+            Number(
+                conversationId
+            );
+
+
+        if (
+            !Number.isInteger(
+                id
+            )
+        ) {
+            return;
+        }
+
+
+        const conversaMonitorada =
+            ESTADO_CHATWOOT_REALTIME
+                .conversas
+                .get(
+                    id
+                );
+
+
+        const accountId =
+            [
+                accountIdInformado,
+                conversaMonitorada?.accountId,
+                ESTADO_CHATWOOT_REALTIME.accountId,
+                obterAccountIdPelaUrlAtual()
+            ]
+                .map(
+                    valor =>
+                        Number(
+                            valor
+                        )
+                )
+                .find(
+                    valor =>
+                        Number.isInteger(
+                            valor
+                        ) &&
+                        valor >
+                            0
+                ) ||
+            null;
+
+
+        ESTADO_CHATWOOT_REALTIME
+            .conversas
+            .delete(
+                id
+            );
+
+
+        if (
+            !accountId
+        ) {
+            return;
+        }
+
+
+        ESTADO_CHATWOOT_REALTIME.accountId =
+            accountId;
+
+
+        enviarMensagemBackground(
+            {
+                type:
+                    TIPO_CANCELAR_INATIVIDADE,
+
+                accountId:
+                    accountId,
+
+                conversationId:
+                    id
+            }
+        );
+    }
+
+
+    function sincronizarConversaRealtime(
+        dados,
+        opcoes = {}
+    ) {
+        const conversationId =
+            Number(
+                dados?.conversationId
+            );
+
+
+        if (
+            !Number.isInteger(
+                conversationId
+            )
+        ) {
+            return null;
+        }
+
+
+        const status =
+            normalizarEspacos(
+                dados?.status
+            )
+                .toLocaleLowerCase(
+                    'pt-BR'
+                );
+
+
+        if (
+            !conversaPertenceAoUsuarioAtual(
+                dados
+            ) ||
+            status &&
+            status !==
+                'open'
+        ) {
+            cancelarMonitoramentoRealtime(
+                conversationId,
+                dados?.accountId
+            );
+
+
+            return null;
+        }
+
+
+        const anterior =
+            ESTADO_CHATWOOT_REALTIME
+                .conversas
+                .get(
+                    conversationId
+                ) ||
+            {};
+
+
+        const mensagemRecebida =
+            Number(
+                dados?.messageType
+            ) ===
+                0 ||
+            normalizarEspacos(
+                dados?.senderType
+            )
+                .toLocaleLowerCase(
+                    'pt-BR'
+                ) ===
+                'contact';
+
+
+        const atividadeAtual =
+            normalizarTimestampMilissegundos(
+                dados?.lastActivityAt
+            );
+
+
+        const configuracaoBackground =
+            configuracaoInatividadeParaBackground();
+
+
+        const assinaturaConfiguracao =
+            JSON.stringify(
+                configuracaoBackground
+            );
+
+
+        const nomeRecebido =
+            normalizarEspacos(
+                dados?.customerName
+            );
+
+
+        const nomeEhDoCliente =
+            mensagemRecebida ||
+            dados?.event !==
+                'message.created';
+
+
+        const conversa = {
+            ...anterior,
+            ...dados,
+            conversationId,
+            accountId:
+                Number(
+                    dados?.accountId
+                ) ||
+                ESTADO_CHATWOOT_REALTIME
+                    .accountId,
+            customerName:
+                nomeEhDoCliente &&
+                nomeRecebido
+                    ?
+                    nomeRecebido
+                    :
+                    anterior.customerName ||
+                    'Cliente',
+            preview:
+                mensagemRecebida &&
+                normalizarEspacos(
+                    dados?.preview
+                )
+                    ?
+                    normalizarEspacos(
+                        dados.preview
+                    )
+                    :
+                    anterior.preview ||
+                    '',
+            lastActivityAt:
+                atividadeAtual ||
+                anterior.lastActivityAt ||
+                Date.now(),
+            assinaturaConfiguracao
+        };
+
+
+        ESTADO_CHATWOOT_REALTIME
+            .conversas
+            .set(
+                conversationId,
+                conversa
+            );
+
+
+        const precisaReagendar =
+            opcoes.force ===
+                true ||
+            !anterior.lastActivityAt ||
+            anterior.lastActivityAt !==
+                conversa.lastActivityAt ||
+            anterior.assinaturaConfiguracao !==
+                assinaturaConfiguracao;
+
+
+        if (
+            precisaReagendar
+        ) {
+            enviarMensagemBackground(
+                {
+                    type:
+                        TIPO_SINCRONIZAR_INATIVIDADE,
+
+                    conversation:
+                        {
+                            accountId:
+                                conversa.accountId,
+
+                            conversationId:
+                                conversa.conversationId,
+
+                            customerName:
+                                conversa.customerName,
+
+                            preview:
+                                conversa.preview,
+
+                            url:
+                                conversa.url,
+
+                            lastActivityAt:
+                                conversa.lastActivityAt
+                        },
+
+                    levels:
+                        configuracaoBackground,
+
+                    suppressPastLevels:
+                        opcoes.suppressPastLevels ===
+                        true
+                }
+            );
+        }
+
+
+        return conversa;
+    }
+
+
+    function notificarMensagemRealtime(
+        dados,
+        conversa
+    ) {
+        const mensagemRecebida =
+            Number(
+                dados?.messageType
+            ) ===
+                0 &&
+            normalizarEspacos(
+                dados?.senderType
+            )
+                .toLocaleLowerCase(
+                    'pt-BR'
+                ) ===
+                'contact' &&
+            dados?.private !==
+                true;
+
+
+        if (
+            !mensagemRecebida ||
+            !conversa ||
+            !PREFERENCIAS_NOTIFICACOES
+                .notificarEmPrimeiroPlano &&
+            paginaChatWootEstaEmUso()
+        ) {
+            return;
+        }
+
+
+        enviarNotificacaoNovaMensagem(
+            {
+                chave:
+                    `conversation:${conversa.conversationId}`,
+
+                assinatura:
+                    `chatwoot-message:${dados.messageId || `${conversa.conversationId}:${conversa.lastActivityAt}`}`,
+
+                nomeCliente:
+                    conversa.customerName ||
+                    'Cliente',
+
+                previa:
+                    conversa.preview ||
+                    'Nova mensagem recebida.',
+
+                url:
+                    conversa.url
+            }
+        );
+    }
+
+
+    function processarSnapshotRealtime(
+        payload
+    ) {
+        const userId =
+            Number(
+                payload?.userId
+            );
+
+
+        const accountId =
+            Number(
+                payload?.accountId
+            );
+
+
+        if (
+            Number.isInteger(
+                userId
+            ) &&
+            userId >
+                0
+        ) {
+            ESTADO_CHATWOOT_REALTIME.userId =
+                userId;
+        }
+
+
+        if (
+            Number.isInteger(
+                accountId
+            ) &&
+            accountId >
+                0
+        ) {
+            ESTADO_CHATWOOT_REALTIME.accountId =
+                accountId;
+        }
+
+
+        if (
+            !Array.isArray(
+                payload?.conversations
+            )
+        ) {
+            return;
+        }
+
+
+        const recebidas =
+            new Set();
+
+
+        payload.conversations.forEach(
+            dados => {
+                const jaMonitorada =
+                    ESTADO_CHATWOOT_REALTIME
+                        .conversas
+                        .has(
+                            Number(
+                                dados?.conversationId
+                            )
+                        );
+
+
+                const conversa =
+                    sincronizarConversaRealtime(
+                        dados,
+                        {
+                            suppressPastLevels:
+                                !jaMonitorada
+                        }
+                    );
+
+
+                if (
+                    conversa
+                ) {
+                    recebidas.add(
+                        conversa.conversationId
+                    );
+                }
+            }
+        );
+
+
+        if (
+            payload.complete ===
+            true
+        ) {
+            Array.from(
+                ESTADO_CHATWOOT_REALTIME
+                    .conversas
+                    .keys()
+            )
+                .filter(
+                    id =>
+                        !recebidas.has(
+                            id
+                        )
+                )
+                .forEach(
+                    id =>
+                        cancelarMonitoramentoRealtime(
+                            id
+                        )
+                );
+        }
+    }
+
+
+    function processarEventoRealtime(
+        dados
+    ) {
+        const currentUserId =
+            Number(
+                dados?.currentUserId
+            );
+
+
+        if (
+            Number.isInteger(
+                currentUserId
+            ) &&
+            currentUserId >
+                0
+        ) {
+            ESTADO_CHATWOOT_REALTIME.userId =
+                currentUserId;
+        }
+
+
+        const accountId =
+            Number(
+                dados?.accountId
+            );
+
+
+        if (
+            Number.isInteger(
+                accountId
+            ) &&
+            accountId >
+                0
+        ) {
+            ESTADO_CHATWOOT_REALTIME.accountId =
+                accountId;
+        }
+
+
+        const conversa =
+            sincronizarConversaRealtime(
+                dados,
+                {
+                    suppressPastLevels:
+                        dados?.event !==
+                        'message.created'
+                }
+            );
+
+
+        if (
+            dados?.event ===
+            'message.created'
+        ) {
+            notificarMensagemRealtime(
+                dados,
+                conversa
+            );
+        }
+    }
+
+
+    function solicitarSincronizacaoRealtime() {
+        window.postMessage(
+            {
+                source:
+                    CHATWOOT_COMMAND_SOURCE,
+
+                type:
+                    'sync'
+            },
+            window.location.origin
+        );
+    }
+
+
+    function iniciarMonitorRealtimeChatWoot() {
+        window.addEventListener(
+            'message',
+            evento => {
+                if (
+                    evento.source !==
+                        window ||
+                    evento.origin !==
+                        window.location.origin ||
+                    evento.data?.source !==
+                        CHATWOOT_REALTIME_SOURCE
+                ) {
+                    return;
+                }
+
+
+                if (
+                    evento.data.type ===
+                    'ready'
+                ) {
+                    solicitarSincronizacaoRealtime();
+                    return;
+                }
+
+
+                if (
+                    evento.data.type ===
+                    'identity'
+                ) {
+                    const payload =
+                        evento.data.payload ||
+                        {};
+
+
+                    ESTADO_CHATWOOT_REALTIME.accountId =
+                        Number(
+                            payload.accountId
+                        );
+
+
+                    ESTADO_CHATWOOT_REALTIME.userId =
+                        Number(
+                            payload.userId
+                        );
+
+
+                    ESTADO_CHATWOOT_REALTIME.ativo =
+                        Number.isInteger(
+                            ESTADO_CHATWOOT_REALTIME.userId
+                        ) &&
+                        ESTADO_CHATWOOT_REALTIME.userId >
+                            0;
+
+
+                    return;
+                }
+
+
+                if (
+                    evento.data.type ===
+                    'assigned-snapshot'
+                ) {
+                    ESTADO_CHATWOOT_REALTIME.ativo =
+                        true;
+                    processarSnapshotRealtime(
+                        evento.data.payload
+                    );
+                    return;
+                }
+
+
+                if (
+                    evento.data.type ===
+                    'event'
+                ) {
+                    ESTADO_CHATWOOT_REALTIME.ativo =
+                        true;
+                    processarEventoRealtime(
+                        evento.data.payload
+                    );
+                }
+            }
+        );
+
+
+        solicitarSincronizacaoRealtime();
+    }
+
+
+    function reagendarConversasRealtime() {
+        ESTADO_CHATWOOT_REALTIME
+            .conversas
+            .forEach(
+                conversa => {
+                    sincronizarConversaRealtime(
+                        conversa,
+                        {
+                            force:
+                                true,
+
+                            suppressPastLevels:
+                                true
+                        }
+                    );
+                }
+            );
+    }
+
+
     function monitorarNotificacaoInatividade(
         card,
         dadosTempo,
@@ -2045,13 +2988,25 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 );
 
 
+        const aquecendo =
+            instante -
+                ESTADO_NOTIFICACOES_INATIVIDADE
+                    .inicioAquecimento <
+                ESTADO_NOTIFICACOES_INATIVIDADE
+                    .duracaoAquecimento;
+
+
         ESTADO_NOTIFICACOES_INATIVIDADE
             .conversas
             .set(
                 chave,
                 {
                     nivel:
-                        nivel
+                        aquecendo
+                            ?
+                            'normal'
+                            :
+                            nivel
                 }
             );
 
@@ -2067,19 +3022,6 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         ) {
             return;
         }
-
-
-        const primeiraObservacao =
-            !estadoAnterior;
-
-
-        const aquecendo =
-            primeiraObservacao &&
-            instante -
-                ESTADO_NOTIFICACOES_INATIVIDADE
-                    .inicioAquecimento <
-                ESTADO_NOTIFICACOES_INATIVIDADE
-                    .duracaoAquecimento;
 
 
         if (
@@ -2423,11 +3365,16 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
         const cardsParaNotificacoes =
-            abaMinhasAtiva
-                ?
-                cards
-                :
-                [];
+            obterCardsConversasMinhas(
+                cards,
+                abaMinhasAtiva
+            );
+
+
+        const cardsNotificaveis =
+            new Set(
+                cardsParaNotificacoes
+            );
 
 
         atualizarTituloMensagensNaoLidas(
@@ -2435,9 +3382,14 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         );
 
 
-        monitorarNovasMensagens(
-            cardsParaNotificacoes
-        );
+        if (
+            !ESTADO_CHATWOOT_REALTIME
+                .ativo
+        ) {
+            monitorarNovasMensagens(
+                cardsParaNotificacoes
+            );
+        }
 
 
         cards.forEach(
@@ -2487,7 +3439,11 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
                 if (
-                    abaMinhasAtiva
+                    !ESTADO_CHATWOOT_REALTIME
+                        .ativo &&
+                    cardsNotificaveis.has(
+                        card
+                    )
                 ) {
                     monitorarNotificacaoInatividade(
                         card,
@@ -4428,6 +5384,22 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
     function carregarMensagens() {
         try {
+            const compartilhadas =
+                storage.getSharedValue(
+                    SHARED_MESSAGES_KEY,
+                    null
+                );
+
+
+            if (
+                Array.isArray(
+                    compartilhadas
+                )
+            ) {
+                return compartilhadas;
+            }
+
+
             const dados =
                 GM_getValue(
                     CONFIG.storageKey,
@@ -4435,13 +5407,32 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 );
 
 
-            return Array.isArray(
-                dados
-            )
-                ?
-                dados
-                :
+            if (
+                Array.isArray(
+                    dados
+                )
+            ) {
+                storage.setSharedValue(
+                    SHARED_MESSAGES_KEY,
+                    dados
+                );
+
+
+                return dados;
+            }
+
+
+            const nativas =
                 obterMensagensNativas();
+
+
+            storage.setSharedValue(
+                SHARED_MESSAGES_KEY,
+                nativas
+            );
+
+
+            return nativas;
 
         } catch (erro) {
             console.error(
@@ -4459,8 +5450,8 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         mensagens
     ) {
         try {
-            GM_setValue(
-                CONFIG.storageKey,
+            storage.setSharedValue(
+                SHARED_MESSAGES_KEY,
                 mensagens
             );
 
@@ -4477,6 +5468,71 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             return false;
         }
     }
+
+
+    storage.onSharedValueChanged(
+        SHARED_MESSAGES_KEY,
+
+        function (
+            novasMensagens
+        ) {
+            if (
+                !Array.isArray(
+                    novasMensagens
+                )
+            ) {
+                return;
+            }
+
+
+            fecharAutocomplete();
+
+            renderizarLista();
+
+
+            const formulario =
+                document.querySelector(
+                    '#way-msg-personalizadas-modal .way-msg-form'
+                );
+
+
+            const usuarioEstaEditando =
+                formulario?.contains(
+                    document.activeElement
+                ) ===
+                true;
+
+
+            if (
+                mensagemEmEdicaoId &&
+                !usuarioEstaEditando
+            ) {
+                const mensagemAtualizada =
+                    novasMensagens.find(
+                        mensagem =>
+                            mensagem.id ===
+                            mensagemEmEdicaoId
+                    );
+
+
+                if (
+                    mensagemAtualizada
+                ) {
+                    renderizarFormulario(
+                        mensagemAtualizada
+                    );
+                } else {
+                    mensagemEmEdicaoId =
+                        null;
+
+
+                    renderizarFormulario(
+                        null
+                    );
+                }
+            }
+        }
+    );
 
 
     /* =========================================================
@@ -10200,6 +11256,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 configurarAlertasInatividade();
 
 
+                reagendarConversasRealtime();
+
+
                 status.className =
                     'way-alert-status success';
 
@@ -10680,7 +11739,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
                         </h2>
 
                         <div class="way-msg-subtitle">
-                            Configure categorias, comandos, automações e tags globais.
+                            Catálogo compartilhado com o Matrix: alterações feitas aqui ficam disponíveis nos dois sistemas.
                         </div>
 
                         <div class="way-msg-backup-status"></div>
@@ -13247,7 +14306,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                 <span>
                     <span class="way-ac-key">Enter</span>
-                    selecionar
+                    inserir sem enviar
                 </span>
 
                 <span>
@@ -14548,6 +15607,74 @@ A previsão para realização do atendimento é dentro do período informado, n�
        MONITOR CHAT
        ========================================================= */
 
+    function bloquearContinuacaoEnterComando(
+        event
+    ) {
+        if (
+            event.key !==
+            'Enter'
+        ) {
+            return;
+        }
+
+
+        const campo =
+            event.target;
+
+
+        if (
+            !ehPossivelCampoChat(
+                campo
+            )
+        ) {
+            return;
+        }
+
+
+        const bloqueadoAte =
+            ENTER_COMANDO_BLOQUEADO.get(
+                campo
+            ) ||
+            0;
+
+
+        if (
+            !bloqueadoAte
+        ) {
+            return;
+        }
+
+
+        if (
+            bloqueadoAte <
+            Date.now()
+        ) {
+            ENTER_COMANDO_BLOQUEADO.delete(
+                campo
+            );
+
+
+            return;
+        }
+
+
+        event.preventDefault();
+
+        event.stopPropagation();
+
+        event.stopImmediatePropagation();
+
+
+        if (
+            event.type ===
+            'keyup'
+        ) {
+            ENTER_COMANDO_BLOQUEADO.delete(
+                campo
+            );
+        }
+    }
+
     function iniciarMonitorComandos() {
         document.addEventListener(
             'input',
@@ -14747,6 +15874,20 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                     event.stopPropagation();
 
+                    event.stopImmediatePropagation();
+
+
+                    if (
+                        event.key ===
+                        'Enter'
+                    ) {
+                        ENTER_COMANDO_BLOQUEADO.set(
+                            campo,
+                            Date.now() +
+                                1000
+                        );
+                    }
+
 
                     executarItemAutocompleteAtual();
 
@@ -14755,6 +15896,20 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 }
             },
 
+            true
+        );
+
+
+        document.addEventListener(
+            'keypress',
+            bloquearContinuacaoEnterComando,
+            true
+        );
+
+
+        document.addEventListener(
+            'keyup',
+            bloquearContinuacaoEnterComando,
             true
         );
 
@@ -14926,6 +16081,64 @@ A previsão para realização do atendimento é dentro do período informado, n�
     }
 
 
+    function iniciarMonitorNavegacaoConversas() {
+        document.addEventListener(
+            'click',
+            evento => {
+                const controle =
+                    evento.target?.closest?.(
+                        'a, button, [role="tab"]'
+                    );
+
+
+                if (
+                    !controle
+                ) {
+                    return;
+                }
+
+
+                const rotulo =
+                    obterRotuloDiretoElemento(
+                        controle
+                    )
+                        .toLocaleLowerCase(
+                            'pt-BR'
+                        );
+
+
+                if (
+                    rotulo !==
+                        'minhas' &&
+                    rotulo !==
+                        'todos'
+                ) {
+                    return;
+                }
+
+
+                setTimeout(
+                    configurarTudo,
+                    100
+                );
+            },
+            true
+        );
+
+
+        document.addEventListener(
+            'visibilitychange',
+            configurarTudo
+        );
+
+
+        window.addEventListener(
+            'focus',
+            configurarTudo
+        );
+    }
+
+
     /* =========================================================
        INICIALIZAÇÃO
        ========================================================= */
@@ -14963,6 +16176,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
     }
 
     function iniciar() {
+        carregarMensagens();
+
+
         aplicarTemaAplicativo();
 
 
@@ -14975,10 +16191,16 @@ A previsão para realização do atendimento é dentro do período informado, n�
         iniciarSincronizacaoPreferenciasNotificacoes();
 
 
+        iniciarMonitorRealtimeChatWoot();
+
+
         configurarTudo();
 
 
         iniciarObserver();
+
+
+        iniciarMonitorNavegacaoConversas();
 
 
         iniciarMonitorComandos();
@@ -15002,7 +16224,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         console.log(
-            '[Way Mensagens] v3.5 ativa.'
+            '[Way Mensagens] v3.7 ativa.'
         );
 
 
@@ -15023,6 +16245,11 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
         console.log(
             '[Way Mensagens] Notificações de novas mensagens ativas.'
+        );
+
+
+        console.log(
+            '[Way Mensagens] Catálogo de mensagens compartilhado com o Matrix.'
         );
 
 

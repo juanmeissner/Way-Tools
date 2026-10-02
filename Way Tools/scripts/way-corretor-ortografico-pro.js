@@ -22,8 +22,8 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
 // @version      3.2
 // @description  Corretor automático PT-BR focado em atendimento, suporte técnico e telecom
 // @match        https://ia-nocodb.internetway.com.br/*
-// @match        https://wayinternet.matrixdobrasil.ai/*
 // @match        https://erp.internetway.com.br/*
+// @match        https://wayinternet.matrixdobrasil.ai/*
 // @run-at       document-start
 // ==/UserScript==
 
@@ -83,6 +83,8 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
         '.faketextbox.pastable[contenteditable="true"]',
         'div[id^="message-"][contenteditable="true"]',
         '.ProseMirror[contenteditable="true"]',
+        '.dx-htmleditor .ql-editor.dx-htmleditor-content[contenteditable="true"]',
+        '.dx-quill-container .ql-editor[contenteditable="true"]',
         'textarea'
     ].join(',');
 
@@ -1459,7 +1461,7 @@ globalThis.WayToolsRuntime.run("way-corretor-ortografico-pro", (storage) => {
 
 
             /*
-             * Espera o Chrome/Matrix/Tampermonkey
+             * Espera o Chrome/Tampermonkey
              * terminar a colagem.
              */
             setTimeout(

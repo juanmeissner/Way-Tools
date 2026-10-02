@@ -5,7 +5,7 @@
     Object.freeze({
       id: "way-mensagens",
       name: "Mensagens Personalizadas",
-      version: "3.5",
+      version: "3.7",
       description: "Mensagens, autocomplete, dados do cliente, visitas técnicas, alertas de inatividade e notificações de novas mensagens.",
       matches: Object.freeze(["https://ia-nocodb.internetway.com.br/*"]),
       defaultEnabled: true
@@ -19,14 +19,52 @@
       defaultEnabled: true
     }),
     Object.freeze({
+      id: "way-erp-gerador-relato",
+      name: "ERP — Gerador de Relato",
+      version: "1.1",
+      description: "Assistente dinâmico que adapta problemas, verificações e ações ao motivo e aos produtos selecionados.",
+      matches: Object.freeze(["https://erp.internetway.com.br/*"]),
+      defaultEnabled: true
+    }),
+    Object.freeze({
       id: "way-interface-compacta",
-      name: "Interface Compacta + Temas",
-      version: "3.4 + 1.2",
-      description: "Interface compacta no ERP e Matrix, com tema claro, escuro ou automático nos dois sistemas.",
-      matches: Object.freeze([
-        "https://wayinternet.matrixdobrasil.ai/*",
-        "https://erp.internetway.com.br/*"
-      ]),
+      name: "ERP — Interface Compacta",
+      version: "3.4",
+      description: "Interface compacta, resumo e apoio a visitas técnicas no ERP Way.",
+      matches: Object.freeze(["https://erp.internetway.com.br/*"]),
+      defaultEnabled: true
+    }),
+    Object.freeze({
+      id: "way-erp-temas",
+      name: "ERP — Tema Claro/Escuro",
+      version: "1.0",
+      badge: "BETA",
+      description: "Tema claro, escuro ou automático exclusivo do ERP Way.",
+      matches: Object.freeze(["https://erp.internetway.com.br/*"]),
+      defaultEnabled: false
+    }),
+    Object.freeze({
+      id: "matrix-mensagens",
+      name: "Matrix — Mensagens Personalizadas",
+      version: "1.0",
+      description: "Comandos com !, tags do cliente e configuração de mensagens no modelo clássico do Matrix.",
+      matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
+      defaultEnabled: true
+    }),
+    Object.freeze({
+      id: "matrix-interface-compacta",
+      name: "Matrix — Interface Compacta",
+      version: "3.4",
+      description: "Interface compacta, resumo e apoio a visitas técnicas no Matrix.",
+      matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
+      defaultEnabled: true
+    }),
+    Object.freeze({
+      id: "matrix-temas",
+      name: "Matrix — Tema Claro/Escuro",
+      version: "1.1",
+      description: "Tema claro, escuro ou automático exclusivo do Matrix.",
+      matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
       defaultEnabled: false
     }),
     Object.freeze({
@@ -35,7 +73,7 @@
       version: "3.5",
       description: "Preserva quebras de linha, negrito e a colagem nativa de imagens no Matrix.",
       matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
-      defaultEnabled: false
+      defaultEnabled: true
     }),
     Object.freeze({
       id: "way-corretor-ortografico-pro",
@@ -43,9 +81,9 @@
       version: "3.2",
       description: "Correção PT-BR ampliada, termos de suporte e telecom, alertas contextuais e dicionário pessoal.",
       matches: Object.freeze([
-        "https://wayinternet.matrixdobrasil.ai/*",
         "https://erp.internetway.com.br/*",
-        "https://ia-nocodb.internetway.com.br/*"
+        "https://ia-nocodb.internetway.com.br/*",
+        "https://wayinternet.matrixdobrasil.ai/*"
       ]),
       defaultEnabled: true
     })

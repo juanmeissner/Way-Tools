@@ -1,21 +1,21 @@
 /*
- * Way Tools - ERP Interface Compacta v3.4
- * Interface compacta exclusiva do ERP Way.
+ * Way Tools - Matrix Interface Compacta v3.4
+ * Interface compacta do Matrix isolada dos temas e dos módulos do ERP.
  */
 
-globalThis.WayToolsRuntime.run("way-interface-compacta", (storage) => {
+globalThis.WayToolsRuntime.run("matrix-interface-compacta", (storage) => {
     "use strict";
 
     const GM_getValue = storage.getValue;
     const GM_setValue = storage.setValue;
     const GM_registerMenuCommand = (label, callback) =>
-        globalThis.WayToolsRuntime.registerMenuCommand("way-interface-compacta", label, callback);
+        globalThis.WayToolsRuntime.registerMenuCommand("matrix-interface-compacta", label, callback);
 // ==UserScript==
-// @name         Way ERP - Interface Compacta
+// @name         Way Matrix - Interface Compacta
 // @namespace    way-interface
 // @version      3.4
 // @description  Interface compacta com resumo, cópia rica e visita técnica com rascunho isolado por atendimento
-// @match        https://erp.internetway.com.br/*
+// @match        https://wayinternet.matrixdobrasil.ai/*
 // @run-at       document-start
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
