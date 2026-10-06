@@ -79,8 +79,8 @@ test("backup rejeita arquivos externos e propriedades perigosas", () => {
   assert.throws(() => manager.validateBackup(dangerous), /propriedade não permitida/);
 });
 
-test("SAC mantém somente os comandos oficiais enquanto o restante do pacote aguarda aprovação", () => {
-  assert.equal(nativeCatalog.perfis.sac.mensagens.length, 2);
+test("SAC incorpora o primeiro pacote aprovado e mantém propostas planejadas no estúdio", () => {
+  assert.equal(nativeCatalog.perfis.sac.mensagens.length, 14);
   assert.deepEqual(
     nativeCatalog.perfis.sac.mensagens
       .filter((message) => message.comando === "enviarimagem")
@@ -98,14 +98,17 @@ test("SAC mantém somente os comandos oficiais enquanto o restante do pacote agu
   const occurrence = nativeCatalog.perfis.sac.mensagens.find((message) => message.comando === "ocorrencia");
   assert.equal(occurrence?.categoria, "orientacoes");
   assert.match(occurrence?.mensagem || "", /normalizada em até 4 horas/);
-  assert.equal(sacDraft.status, "rascunho_para_aprovacao");
-  assert.equal(sacDraft.approvalRequired, true);
+  assert.equal(sacDraft.status, "primeiro_pacote_aprovado");
+  assert.equal(sacDraft.approvalRequired, false);
   const commands = sacDraft.categories.flatMap((category) => category.commands);
   const firstPackage = commands.filter((command) => command.firstPackage);
+  const planned = commands.filter((command) => command.status === "planejado");
   assert.equal(commands.length, 42);
   assert.deepEqual(firstPackage.map((command) => command.command).sort(), [...sacDraft.recommendedFirstPackage].sort());
   assert.equal(firstPackage.length, 12);
-  assert.ok(firstPackage.every((command) => command.status === "aguardando_aprovacao"));
+  assert.ok(firstPackage.every((command) => command.status === "aprovado"));
   assert.ok(firstPackage.every((command) => command.text || (command.morning && command.afternoon && command.night)));
+  assert.equal(planned.length, 30);
+  assert.ok(firstPackage.every((command) => nativeCatalog.perfis.sac.mensagens.some((message) => message.comando === command.command)));
   assert.ok(commands.find((command) => command.command === "segundavia").aliases.includes("2via"));
 });

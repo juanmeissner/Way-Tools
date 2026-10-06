@@ -146,6 +146,17 @@ test("o agradecimento nativo preserva a seleção de gênero em todos os horári
   }
 });
 
+test("encerramento e visita possuem versões masculina e feminina", () => {
+  const messages = loadNativeMessageCatalog().profiles.n2.messages;
+  const normalService = messages.find((message) => message.comando === "serviconormal");
+  const closing = messages.find((message) => message.comando === "encerra");
+  const visit = messages.find((message) => message.comando === "visita");
+
+  assert.match(normalService.mensagem, /\{\{genero:ajudá-lo\|ajudá-la\}\}/);
+  assert.match(closing.mensagem, /\{\{genero:ajudá-lo\|ajudá-la\}\}/);
+  assert.match(visit.templateVisita, /\{\{genero:atendê-lo\|atendê-la\}\}/);
+});
+
 test("uma nova versão oficial é mesclada sem apagar escolhas do usuário", () => {
   const currentCatalog = loadNativeMessageCatalog();
   const { manager: currentManager } = createManager(currentCatalog);
@@ -208,15 +219,19 @@ test("uma nova versão oficial é mesclada sem apagar escolhas do usuário", () 
 
 test("a inicialização em chrome.storage.local é persistente e idempotente", async () => {
   const chromeData = {};
-  const { manager, writes } = createManager(loadNativeMessageCatalog(), chromeData);
+  const nativeCatalog = loadNativeMessageCatalog();
+  const { manager, writes } = createManager(nativeCatalog, chromeData);
 
   const firstN2 = await manager.ensureWithChromeStorage("n2");
   const firstSac = await manager.ensureWithChromeStorage("sac");
   const writeCountAfterInitialization = writes.length;
 
   assert.equal(firstN2.length, 18);
-  assert.equal(firstSac.length, 2);
-  assert.deepEqual(clone(firstSac.map((message) => message.comando).sort()), ["enviarimagem", "ocorrencia"]);
+  assert.equal(firstSac.length, 14);
+  assert.deepEqual(
+    clone(firstSac.map((message) => message.comando).sort()),
+    clone(nativeCatalog.profiles.sac.messages.map((message) => message.comando).sort())
+  );
   assert.ok(Array.isArray(chromeData[`wayTools.shared.${manager.catalogKeys.n2}`]));
   assert.ok(chromeData[`wayTools.shared.${manager.stateKeys.n2}`]);
   assert.ok(Array.isArray(chromeData[`wayTools.shared.${manager.catalogKeys.sac}`]));

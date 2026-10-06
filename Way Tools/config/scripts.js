@@ -5,7 +5,7 @@
     Object.freeze({
       id: "way-mensagens",
       name: "Mensagens Personalizadas",
-      version: "3.10",
+      version: "3.11",
       description: "Mensagens, autocomplete, dados do cliente, visitas técnicas, alertas de inatividade e notificações de novas mensagens.",
       matches: Object.freeze(["https://ia-nocodb.internetway.com.br/*"]),
       defaultEnabled: true
@@ -46,7 +46,7 @@
     Object.freeze({
       id: "matrix-mensagens",
       name: "Matrix — Mensagens Personalizadas",
-      version: "1.1",
+      version: "1.2",
       description: "Comandos com !, tags do cliente e configuração de mensagens no modelo clássico do Matrix.",
       matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
       defaultEnabled: true

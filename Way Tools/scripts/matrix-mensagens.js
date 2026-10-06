@@ -1,5 +1,5 @@
 /*
- * Way Tools - Matrix Mensagens Personalizadas v1.1
+ * Way Tools - Matrix Mensagens Personalizadas v1.2
  * Comandos, tags e configuração de mensagens para o modelo clássico do Matrix.
  */
 
@@ -365,6 +365,9 @@ globalThis.WayToolsRuntime.run("matrix-mensagens", (storage) => {
   }
 
   function rawMessageText(message) {
+    if (message.tipo === "visita") {
+      return message.templateVisita || "";
+    }
     return message.variacaoHorario
       ? message[currentPeriod()] || ""
       : message.mensagem || "";
@@ -387,6 +390,39 @@ globalThis.WayToolsRuntime.run("matrix-mensagens", (storage) => {
         return `${masculine.trim()} / ${feminine.trim()}`;
       }
     );
+  }
+
+  function normalizeFirstNameForGender(fullName) {
+    return String(fullName || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .replace(/[^a-z\s'-]/g, " ")
+      .trim()
+      .split(/\s+/)[0] || "";
+  }
+
+  function inferClientGender(fullName) {
+    const firstName = normalizeFirstNameForGender(fullName);
+    const feminineNamesWithoutA = new Set([
+      "alice", "beatriz", "carmen", "caroline", "cleide", "daiane", "denise",
+      "eliane", "ester", "helen", "ingrid", "iris", "isabel", "jennifer",
+      "lais", "mabel", "michele", "nicole", "raquel", "ruth", "simone",
+      "sueli", "yasmin"
+    ]);
+    const masculineNamesEndingA = new Set(["josua", "joshua", "luca", "luka", "nicola"]);
+
+    if (!firstName) {
+      return { gender: "masculino", identified: false, firstName: "" };
+    }
+
+    const feminine = feminineNamesWithoutA.has(firstName)
+      || (firstName.endsWith("a") && !masculineNamesEndingA.has(firstName));
+    return {
+      gender: feminine ? "feminino" : "masculino",
+      identified: true,
+      firstName
+    };
   }
 
   function messageHasGenderVariant(message) {
@@ -999,9 +1035,21 @@ globalThis.WayToolsRuntime.run("matrix-mensagens", (storage) => {
 
   function openVisit(field, message) {
     const data = getClientData(field);
+    const template = message.templateVisita || "";
+    const hasGender = hasGenderVariant(template);
     openSpecialModal(`
       <header><h2>🛠 Visita técnica</h2><button type="button" data-way-close>×</button></header>
       <div class="way-matrix-grid">
+        ${hasGender ? `
+          <label class="wide way-matrix-visit-gender">Tratamento do cliente
+            <select name="genero">
+              <option value="automatico">Automático pelo primeiro nome</option>
+              <option value="masculino">Masculino — atendê-lo</option>
+              <option value="feminino">Feminino — atendê-la</option>
+            </select>
+            <small data-way-visit-gender-status></small>
+          </label>
+        ` : ""}
         <label>Nome do cliente<input name="nomecliente" value="${escapeHtml(data.nomecliente)}"></label>
         <label>Telefone<input name="telefone" value="${escapeHtml(data.telefone)}"></label>
         <label>Endereço<input name="endereco" value="${escapeHtml(data.endereco)}"></label>
@@ -1016,19 +1064,47 @@ globalThis.WayToolsRuntime.run("matrix-mensagens", (storage) => {
         [...root.querySelectorAll("input[name], select[name]")].map((input) => [input.name, input.value])
       );
       values.data = formatDate(values.data).replace(/^\*\*(HOJE|AMANHÃ)\*\*,\s*/, "").replace(/^\*\*|\*\*$/g, "");
-      const template = message.templateVisita || "";
-      setFieldText(field, applyTags(template, field, values));
+      const inferred = inferClientGender(values.nomecliente);
+      const selectedGender = values.genero && values.genero !== "automatico"
+        ? values.genero
+        : inferred.gender;
+      setFieldText(field, applyTags(resolveGenderVariant(template, selectedGender), field, values));
       root.remove();
     });
+
+    const root = document.getElementById(SPECIAL_ROOT_ID);
+    const nameInput = root?.querySelector('[name="nomecliente"]');
+    const genderSelect = root?.querySelector('[name="genero"]');
+    const genderStatus = root?.querySelector("[data-way-visit-gender-status]");
+
+    const updateGenderStatus = () => {
+      if (!genderSelect || !genderStatus) {
+        return;
+      }
+      const inferred = inferClientGender(nameInput?.value || "");
+      const selectedGender = genderSelect.value !== "automatico" ? genderSelect.value : inferred.gender;
+      genderStatus.textContent = genderSelect.value === "automatico"
+        ? inferred.identified
+          ? `Detectado pelo primeiro nome: ${selectedGender === "feminino" ? "Feminino — atendê-la" : "Masculino — atendê-lo"}. Você pode corrigir acima.`
+          : "Nome não identificado. Foi usada a forma masculina; você pode alterar acima."
+        : `Seleção manual: ${selectedGender === "feminino" ? "Feminino — atendê-la" : "Masculino — atendê-lo"}.`;
+    };
+
+    nameInput?.addEventListener("input", updateGenderStatus);
+    genderSelect?.addEventListener("change", updateGenderStatus);
+    updateGenderStatus();
   }
 
   function openGenderSelector(message, field) {
     closeAutocomplete();
     document.getElementById(SPECIAL_ROOT_ID)?.remove();
 
+    const examples = rawMessageText(message).match(
+      /\{\{\s*genero\s*:\s*([^|{}]+?)\s*\|\s*([^{}]+?)\s*\}\}/iu
+    );
     const options = [
-      { id: "masculino", icon: "♂", label: "Masculino", example: "ajudá-lo" },
-      { id: "feminino", icon: "♀", label: "Feminino", example: "ajudá-la" }
+      { id: "masculino", icon: "♂", label: "Masculino", example: examples?.[1]?.trim() || "Forma masculina" },
+      { id: "feminino", icon: "♀", label: "Feminino", example: examples?.[2]?.trim() || "Forma feminina" }
     ];
     let selectedIndex = 0;
     const root = document.createElement("div");
@@ -1634,7 +1710,7 @@ globalThis.WayToolsRuntime.run("matrix-mensagens", (storage) => {
       .way-matrix-config-body{display:grid;grid-template-columns:300px 1fr;min-height:500px;border-top:1px solid #294b70}.way-matrix-config aside{padding:10px;border-right:1px solid #294b70;overflow:auto}.way-matrix-list-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;align-items:stretch}.way-matrix-config aside .way-matrix-list-row>button{display:flex;justify-content:space-between;width:100%;margin-bottom:5px;background:transparent}.way-matrix-config aside button.active{background:#164f82}.way-matrix-config aside span{color:#aecaeb;text-transform:capitalize}.way-matrix-order-controls{display:flex;gap:2px}.way-matrix-config aside .way-matrix-order-controls button{width:28px;padding:4px;margin:0 0 5px}.way-matrix-live-preview{margin-top:14px;padding:14px;border:1px solid #365b7e;border-radius:10px;background:#071524}.way-matrix-live-preview>strong{display:block;margin-bottom:8px;color:#72c8ff}.way-matrix-tag-warning{margin:10px 0;padding:10px;border:1px solid #d6a12b;border-radius:8px;background:#3a2b09;color:#ffd978}.way-matrix-message-preview{padding:16px;line-height:1.6;white-space:normal}.way-matrix-category-order{padding:12px}.way-matrix-category-order>div{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:7px;border-bottom:1px solid #294b70}.way-matrix-ac-actions{display:flex;gap:8px;font-size:16px}.way-matrix-ac-actions span{cursor:pointer;color:#ffd978}
       .way-matrix-gender-modal{width:min(540px,96vw)!important}.way-matrix-gender-modal header p{margin:4px 0 0;color:#aecaeb}.way-matrix-gender-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:20px}.way-matrix-gender-option{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;border:2px solid #365b7e!important;border-radius:14px!important;background:#0e2a4b!important;color:#fff!important}.way-matrix-gender-option:hover,.way-matrix-gender-option.active,.way-matrix-gender-option:focus-visible{border-color:#249ae9!important;background:#164f82!important;box-shadow:0 0 0 3px rgba(36,154,233,.2);outline:0}.way-matrix-gender-icon{display:grid;place-items:center;width:76px;height:76px;margin-bottom:10px;border-radius:999px;background:rgba(36,154,233,.16);color:#72c8ff;font-size:54px;font-weight:700;line-height:1}.way-matrix-gender-option>strong{font-size:18px}.way-matrix-gender-option>small{margin-top:4px;color:#aecaeb;font-size:12px}.way-matrix-gender-help{padding:0 20px 20px;color:#aecaeb;text-align:center;font-size:12px}
       .way-matrix-gender-syntax-info{display:flex;flex-direction:column;gap:4px;margin:4px 0 14px;padding:10px 12px;border:1px solid #8b3c75;border-radius:8px;background:rgba(219,39,119,.1);color:#bcd3ea}.way-matrix-gender-syntax-info code{color:#ff8dcc;font-weight:700}
-      .way-matrix-config form,.way-matrix-special{padding:18px}.way-matrix-config form>label,.way-matrix-grid label,.way-matrix-special>label{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;color:#bcd3ea}.way-matrix-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.way-matrix-grid .wide{grid-column:1/-1}.way-matrix-grid .checkbox{flex-direction:row;align-items:center;margin-top:28px}.way-matrix-config input,.way-matrix-config select,.way-matrix-config textarea,.way-matrix-special input,.way-matrix-special select{width:100%;box-sizing:border-box;background:#071524;color:#fff;border:1px solid #365b7e;border-radius:8px;padding:9px;resize:vertical}.way-matrix-config footer,.way-matrix-special footer{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}.way-matrix-periods{grid-template-columns:repeat(3,minmax(0,1fr))}.way-matrix-special fieldset{border:1px solid #365b7e;border-radius:10px;margin:12px 0;padding:12px}.way-matrix-special fieldset label{display:block;margin:8px 0}.way-matrix-special fieldset input{width:auto;margin-right:8px}
+      .way-matrix-config form,.way-matrix-special{padding:18px}.way-matrix-config form>label,.way-matrix-grid label,.way-matrix-special>label{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;color:#bcd3ea}.way-matrix-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.way-matrix-grid .wide{grid-column:1/-1}.way-matrix-grid .checkbox{flex-direction:row;align-items:center;margin-top:28px}.way-matrix-config input,.way-matrix-config select,.way-matrix-config textarea,.way-matrix-special input,.way-matrix-special select{width:100%;box-sizing:border-box;background:#071524;color:#fff;border:1px solid #365b7e;border-radius:8px;padding:9px;resize:vertical}.way-matrix-visit-gender{padding:11px;border:1px solid rgba(36,154,233,.4);border-radius:10px;background:rgba(36,154,233,.08)}.way-matrix-visit-gender small{color:#aecaeb;font-size:11px;line-height:1.45}.way-matrix-config footer,.way-matrix-special footer{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}.way-matrix-periods{grid-template-columns:repeat(3,minmax(0,1fr))}.way-matrix-special fieldset{border:1px solid #365b7e;border-radius:10px;margin:12px 0;padding:12px}.way-matrix-special fieldset label{display:block;margin:8px 0}.way-matrix-special fieldset input{width:auto;margin-right:8px}
       @media(max-width:760px){.way-matrix-config-body{grid-template-columns:1fr}.way-matrix-config aside{max-height:180px;border-right:0;border-bottom:1px solid #294b70}.way-matrix-grid,.way-matrix-periods{grid-template-columns:1fr}.way-matrix-gender-options{grid-template-columns:1fr}.way-matrix-gender-option{min-height:125px}.way-matrix-gender-icon{width:58px;height:58px;font-size:42px}}
     `;
     document.documentElement.appendChild(style);
@@ -1657,7 +1733,7 @@ globalThis.WayToolsRuntime.run("matrix-mensagens", (storage) => {
     window.visualViewport?.addEventListener("resize", positionAutocomplete);
     window.visualViewport?.addEventListener("scroll", positionAutocomplete);
     new MutationObserver(configureAll).observe(document.documentElement, { childList: true, subtree: true });
-    console.info("[Way Matrix Mensagens] v1.1 ativa no modelo clássico.");
+    console.info("[Way Matrix Mensagens] v1.2 ativa no modelo clássico.");
   }
 
   if (document.documentElement) {

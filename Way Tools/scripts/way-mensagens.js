@@ -1,5 +1,5 @@
 /*
- * Way Tools - Mensagens Personalizadas v3.10
+ * Way Tools - Mensagens Personalizadas v3.11
  * Adaptado do userscript fornecido para o runtime nativo da extensão.
  */
 
@@ -11,7 +11,7 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
 // ==UserScript==
 // @name         Way - Mensagens Personalizadas
 // @namespace    way-mensagens-personalizadas
-// @version      3.10
+// @version      3.11
 // @description  Mensagens personalizadas com dados do cliente, tags globais, autocomplete, visita técnica, alertas de inatividade, notificações de novas mensagens e backup JSON
 // @match        https://ia-nocodb.internetway.com.br/*
 // @run-at       document-start
@@ -428,7 +428,7 @@ Assim que o técnico iniciar o deslocamento até o endereço, você receberá um
 🔄 **Precisa reagendar?**
 Caso não possa receber o técnico no período agendado, basta responder à mensagem de confirmação enviada pelo WhatsApp solicitando um novo horário ou entrar em contato com nossa equipe.
 
-Estamos à disposição e teremos prazer em atendê-lo! 😊`;
+Estamos à disposição e teremos prazer em {{genero:atendê-lo|atendê-la}}! 😊`;
 
 
     /* =========================================================
@@ -7046,6 +7046,15 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         }
 
 
+        if (
+            mensagem.tipo ===
+            'visita'
+        ) {
+            return mensagem.templateVisita ||
+                '';
+        }
+
+
         let texto =
             '';
 
@@ -7115,6 +7124,124 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 return `${masculino.trim()} / ${feminino.trim()}`;
             }
         );
+    }
+
+
+    function normalizarPrimeiroNomeGenero(
+        nomeCompleto
+    ) {
+        return String(
+            nomeCompleto ||
+            ''
+        )
+            .normalize(
+                'NFD'
+            )
+            .replace(
+                /[\u0300-\u036f]/g,
+                ''
+            )
+            .toLocaleLowerCase(
+                'pt-BR'
+            )
+            .replace(
+                /[^a-z\s'-]/g,
+                ' '
+            )
+            .trim()
+            .split(
+                /\s+/
+            )[0] ||
+            '';
+    }
+
+
+    function inferirGeneroCliente(
+        nomeCompleto
+    ) {
+        const primeiroNome =
+            normalizarPrimeiroNomeGenero(
+                nomeCompleto
+            );
+
+
+        const nomesFemininosSemA =
+            new Set([
+                'alice',
+                'beatriz',
+                'carmen',
+                'caroline',
+                'cleide',
+                'daiane',
+                'denise',
+                'eliane',
+                'ester',
+                'helen',
+                'ingrid',
+                'iris',
+                'isabel',
+                'jennifer',
+                'lais',
+                'mabel',
+                'michele',
+                'nicole',
+                'raquel',
+                'ruth',
+                'simone',
+                'sueli',
+                'yasmin'
+            ]);
+
+
+        const nomesMasculinosTerminadosEmA =
+            new Set([
+                'josua',
+                'joshua',
+                'luca',
+                'luka',
+                'nicola'
+            ]);
+
+
+        if (
+            !primeiroNome
+        ) {
+            return {
+                genero:
+                    'masculino',
+                identificado:
+                    false,
+                primeiroNome:
+                    ''
+            };
+        }
+
+
+        const feminino =
+            nomesFemininosSemA.has(
+                primeiroNome
+            ) ||
+            (
+                primeiroNome.endsWith(
+                    'a'
+                ) &&
+                !nomesMasculinosTerminadosEmA.has(
+                    primeiroNome
+                )
+            );
+
+
+        return {
+            genero:
+                feminino
+                    ?
+                    'feminino'
+                    :
+                    'masculino',
+            identificado:
+                true,
+            primeiroNome
+        };
     }
 
 
@@ -11839,8 +11966,12 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         if (
-            tipo ===
-                'texto' &&
+            [
+                'texto',
+                'visita'
+            ].includes(
+                tipo
+            ) &&
             !variacaoHorario &&
             !mensagem
         ) {
@@ -13845,18 +13976,30 @@ A previsão para realização do atendimento é dentro do período informado, n�
         )?.remove();
 
 
+        const exemplos =
+            obterTextoBrutoPorPeriodo(
+                mensagem
+            ).match(
+                /\{\{\s*genero\s*:\s*([^|{}]+?)\s*\|\s*([^{}]+?)\s*\}\}/iu
+            );
+
+
         const opcoes = [
             {
                 id: 'masculino',
                 icone: '♂',
                 titulo: 'Masculino',
-                exemplo: 'ajudá-lo'
+                exemplo:
+                    exemplos?.[1]?.trim() ||
+                    'Forma masculina'
             },
             {
                 id: 'feminino',
                 icone: '♀',
                 titulo: 'Feminino',
-                exemplo: 'ajudá-la'
+                exemplo:
+                    exemplos?.[2]?.trim() ||
+                    'Forma feminina'
             }
         ];
 
@@ -14953,6 +15096,12 @@ A previsão para realização do atendimento é dentro do período informado, n�
             TEMPLATE_VISITA_PADRAO;
 
 
+        const possuiGenero =
+            possuiVariacaoGenero(
+                template
+            );
+
+
         const tags =
             extrairTagsTemplate(
                 template
@@ -15032,6 +15181,32 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 `;
 
 
+        const campoGeneroHTML =
+            possuiGenero
+                ?
+                `
+                    <div class="way-visita-field way-visita-gender-field">
+                        <label for="way-visita-genero">
+                            Tratamento do cliente
+                            <span class="way-visita-field-auto">Automático</span>
+                        </label>
+
+                        <select
+                            id="way-visita-genero"
+                            data-way-visita-genero
+                        >
+                            <option value="automatico">Automático pelo primeiro nome</option>
+                            <option value="masculino">Masculino — atendê-lo</option>
+                            <option value="feminino">Feminino — atendê-la</option>
+                        </select>
+
+                        <small data-way-visita-genero-status></small>
+                    </div>
+                `
+                :
+                '';
+
+
         overlay.innerHTML = `
 
             <div class="way-special-modal way-visita-modal">
@@ -15064,6 +15239,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     <div class="way-visita-layout">
 
                         <div class="way-visita-fields">
+                            ${campoGeneroHTML}
                             ${camposHTML}
                         </div>
 
@@ -15132,6 +15308,18 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 overlay.querySelectorAll(
                     '[data-way-visita-input]'
                 )
+            );
+
+
+        const seletorGenero =
+            overlay.querySelector(
+                '[data-way-visita-genero]'
+            );
+
+
+        const statusGenero =
+            overlay.querySelector(
+                '[data-way-visita-genero-status]'
             );
 
 
@@ -15214,10 +15402,50 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         function atualizarPreview() {
+            const atuais =
+                coletarValores();
+
+
+            const generoAutomatico =
+                inferirGeneroCliente(
+                    atuais.nomecliente
+                );
+
+
+            const generoAtual =
+                seletorGenero?.value &&
+                seletorGenero.value !==
+                    'automatico'
+                    ?
+                    seletorGenero.value
+                    :
+                    generoAutomatico.genero;
+
+
+            if (
+                statusGenero
+            ) {
+                statusGenero.textContent =
+                    seletorGenero?.value ===
+                        'automatico'
+                        ?
+                        generoAutomatico.identificado
+                            ?
+                            `Detectado pelo primeiro nome: ${generoAutomatico.genero === 'feminino' ? 'Feminino — atendê-la' : 'Masculino — atendê-lo'}. Você pode corrigir acima.`
+                            :
+                            'Nome não identificado. Foi usada a forma masculina; você pode alterar acima.'
+                        :
+                        `Seleção manual: ${generoAtual === 'feminino' ? 'Feminino — atendê-la' : 'Masculino — atendê-lo'}.`;
+            }
+
+
             preview.value =
                 gerarMensagemVisita(
-                    template,
-                    coletarValores(),
+                    resolverVariacaoGenero(
+                        template,
+                        generoAtual
+                    ),
+                    atuais,
                     true
                 );
         }
@@ -15248,6 +15476,12 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     }
                 );
             }
+        );
+
+
+        seletorGenero?.addEventListener(
+            'change',
+            atualizarPreview
         );
 
 
@@ -15310,7 +15544,18 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                     const texto =
                         gerarMensagemVisita(
-                            template,
+                            resolverVariacaoGenero(
+                                template,
+                                seletorGenero?.value &&
+                                seletorGenero.value !==
+                                    'automatico'
+                                    ?
+                                    seletorGenero.value
+                                    :
+                                    inferirGeneroCliente(
+                                        atuais.nomecliente
+                                    ).genero
+                            ),
                             atuais,
                             false
                         );
@@ -15968,7 +16213,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         console.log(
-            '[Way Mensagens] v3.10 ativa.'
+            '[Way Mensagens] v3.11 ativa.'
         );
 
 

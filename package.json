@@ -1,6 +1,6 @@
 {
   "name": "way-tools-extension",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "private": true,
   "description": "Extensão Chrome Way Tools",
   "scripts": {

@@ -217,6 +217,8 @@ assert.match(sacReviewSource, /data\/mensagens-nativas\.json/);
 assert.match(sacReviewSource, /wayTools\.developer\.messageCatalogDraft\.v1/);
 assert.match(sacReviewSource, /chrome\.storage\.local\.set/);
 assert.match(sacReviewSource, /function mergeLegacySacDraft\(/);
+assert.match(sacReviewSource, /function mergeStoredCatalogWithBaseline\(/);
+assert.match(sacReviewSource, /STUDIO_SEED_VERSION\s*=\s*2/);
 assert.match(sacReviewSource, /function auditCatalog\(/);
 assert.match(sacReviewSource, /function openCategoryEditor\(/);
 assert.match(sacReviewSource, /function openMessageEditor\(/);
@@ -295,7 +297,8 @@ assert.match(privacyPolicySource, /não aceita chaves que/);
 assert.match(privacyPolicySource, /Central de Notificações ou na tela bloqueada/);
 assert.doesNotMatch(privacyPolicySource, /devem ser substituídos pelas informações reais/);
 assert.match(catalogSource, /id:\s*"way-mensagens"/);
-assert.match(catalogSource, /id:\s*"way-mensagens"[\s\S]*?version:\s*"3\.10"/);
+assert.match(catalogSource, /id:\s*"way-mensagens"[\s\S]*?version:\s*"3\.11"/);
+assert.match(catalogSource, /id:\s*"matrix-mensagens"[\s\S]*?version:\s*"1\.2"/);
 assert.match(catalogSource, /id:\s*"way-erp-copiar-dados"/);
 assert.match(catalogSource, /version:\s*"1\.6"/);
 assert.match(catalogSource, /id:\s*"way-erp-gerador-relato"/);
@@ -383,7 +386,7 @@ assert.match(wayMessagesStyleSource, /var\(--way-autocomplete-max-height, 320px\
 assert.match(wayMessagesStyleSource, /\.way-msg-modal/);
 assert.match(scriptSource, /const GM_getValue = storage\.getValue/);
 assert.match(scriptSource, /const GM_setValue = storage\.setValue/);
-assert.match(scriptSource, /\[Way Mensagens\] v3\.10 ativa\./);
+assert.match(scriptSource, /\[Way Mensagens\] v3\.11 ativa\./);
 assert.match(scriptSource, /Perfil ativo:/);
 assert.match(scriptSource, /function obterExperienciaMensagens\(/);
 assert.match(scriptSource, /function abrirPreviewMensagemAutocomplete\(/);
@@ -1412,9 +1415,9 @@ assert.doesNotMatch(
 const nativeMessages = loadNativeMessages();
 const nativeMessageCatalog = loadNativeMessageCatalog();
 assert.equal(nativeMessageCatalog.schemaVersion, 2, "O catálogo nativo precisa usar o schema 2.");
-assert.equal(nativeMessageCatalog.profiles.n2.version, 4);
-assert.equal(nativeMessageCatalog.profiles.sac.version, 3);
-assert.equal(nativeMessageCatalog.profiles.sac.messages.length, 2, "O SAC deve conter os comandos oficiais já aprovados.");
+assert.equal(nativeMessageCatalog.profiles.n2.version, 5);
+assert.equal(nativeMessageCatalog.profiles.sac.version, 4);
+assert.equal(nativeMessageCatalog.profiles.sac.messages.length, 14, "O SAC deve conter os comandos oficiais já aprovados.");
 assert.ok(
   nativeMessageCatalog.categories.some((category) =>
     category.id === "financeiro" && category.setores.includes("sac")
@@ -1476,6 +1479,23 @@ for (const period of ["manha", "tarde", "noite"]) {
     `A versão de ${period} do !agradecimento precisa oferecer masculino e feminino.`
   );
 }
+const normalServiceMessage = nativeMessages.find((message) => message.comando === "serviconormal");
+const closingMessage = nativeMessages.find((message) => message.comando === "encerra");
+const visitMessage = nativeMessages.find((message) => message.comando === "visita");
+assert.match(normalServiceMessage?.mensagem || "", /\{\{genero:ajudá-lo\|ajudá-la\}\}/);
+assert.match(closingMessage?.mensagem || "", /\{\{genero:ajudá-lo\|ajudá-la\}\}/);
+assert.match(visitMessage?.templateVisita || "", /\{\{genero:atendê-lo\|atendê-la\}\}/);
+assert.match(scriptSource, /function inferirGeneroCliente\(/);
+assert.match(scriptSource, /data-way-visita-genero/);
+assert.match(scriptSource, /resolverVariacaoGenero\(\s*template,\s*generoAtual/);
+assert.match(matrixMessagesSource, /function inferClientGender\(/);
+assert.match(matrixMessagesSource, /name="genero"/);
+assert.match(matrixMessagesSource, /resolveGenderVariant\(template, selectedGender\)/);
+assert.doesNotMatch(
+  matrixMessagesSource,
+  /\["texto", "visita"\]\.includes\(message\.tipo\)/,
+  "O !visita precisa usar o seletor integrado ao próprio formulário, sem abrir o modal genérico de gênero."
+);
 assert.equal(new Set(nativeMessages.map((message) => message.id)).size, nativeMessages.length, "Os IDs das mensagens nativas precisam ser únicos.");
 assert.equal(new Set(nativeMessages.map((message) => message.comando)).size, nativeMessages.length, "Os comandos das mensagens nativas precisam ser únicos.");
 const nativeMessagesText = JSON.stringify(nativeMessages);
@@ -1574,7 +1594,7 @@ futureCatalog.profiles.n2.messages.push({
   noite: "",
   templateVisita: ""
 });
-futureCatalog.profiles.sac.version = 2;
+futureCatalog.profiles.sac.version = nativeMessageCatalog.profiles.sac.version + 1;
 futureCatalog.profiles.sac.messages.push({
   id: "native-first-sac",
   comando: "aberturasac",

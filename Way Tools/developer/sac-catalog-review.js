@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "wayTools.developer.messageCatalogDraft.v1";
+  const STUDIO_SEED_VERSION = 2;
   const PROFILES = ["sac", "n2"];
   const TAGS = ["nome", "nomecliente", "email", "telefone", "cpf", "endereco", "protocolo", "data", "periodo", "horario"];
   const TAG_SAMPLES = Object.freeze({
@@ -255,20 +256,70 @@
     const merged = clone(nativeCatalog);
     draftIds.clear();
     PROFILES.flatMap((profile) => merged.perfis[profile].mensagens).forEach((message) => draftIds.add(message.id));
-    if (merged.perfis.sac.mensagens.length === 0 && Array.isArray(sacDraft?.categories)) {
-      merged.perfis.sac.mensagens = sacDraft.categories
-        .flatMap((category) => Array.isArray(category.commands) ? category.commands : [])
-        .map(draftCommandToMessage)
-        .filter((message) => message.comando && merged.categorias.some((category) =>
+    if (Array.isArray(sacDraft?.categories)) {
+      const existingCommands = new Set(merged.perfis.sac.mensagens.map((message) => message.comando));
+      const proposals = sacDraft.categories
+        .flatMap((category) => Array.isArray(category.commands) ? category.commands : []);
+
+      for (const command of proposals) {
+        const normalizedCommand = normalizeCommand(command.command);
+        if (!normalizedCommand || existingCommands.has(normalizedCommand)) continue;
+        const message = draftCommandToMessage(command);
+        const validCategory = merged.categorias.some((category) =>
           category.id === message.categoria && category.setores.includes("sac")
-        ));
+        );
+        if (!validCategory) continue;
+        merged.perfis.sac.mensagens.push(message);
+        existingCommands.add(normalizedCommand);
+      }
+
       merged.perfis.sac.quantidade = merged.perfis.sac.mensagens.length;
     }
     merged.metadadosDesenvolvimento = {
       schemaVersion: 1,
+      seedVersion: STUDIO_SEED_VERSION,
       origem: "catalogo-nativo-e-proposta-sac",
-      aviso: sacDraft?.notice || "Proposta sujeita à aprovação interna."
+      aviso: sacDraft?.notice || "Catálogo SAC disponível para desenvolvimento."
     };
+    return merged;
+  }
+
+  function mergeStoredCatalogWithBaseline(storedCatalog, baseline) {
+    const merged = normalizeImportedCatalog(storedCatalog);
+    const currentSeedVersion = Number(merged.metadadosDesenvolvimento?.seedVersion || 0);
+    if (currentSeedVersion >= STUDIO_SEED_VERSION) return merged;
+
+    const categoryIds = new Set(merged.categorias.map((category) => category.id));
+    for (const category of baseline.categorias) {
+      if (!categoryIds.has(category.id)) {
+        merged.categorias.push(clone(category));
+        categoryIds.add(category.id);
+      }
+    }
+
+    for (const profile of PROFILES) {
+      const ids = new Set(merged.perfis[profile].mensagens.map((message) => message.id));
+      const commands = new Set(merged.perfis[profile].mensagens.map((message) => message.comando));
+      for (const message of baseline.perfis[profile].mensagens) {
+        if (ids.has(message.id) || commands.has(message.comando)) continue;
+        merged.perfis[profile].mensagens.push(clone(message));
+        ids.add(message.id);
+        commands.add(message.comando);
+      }
+      merged.perfis[profile].versaoCatalogo = Math.max(
+        merged.perfis[profile].versaoCatalogo,
+        baseline.perfis[profile].versaoCatalogo
+      );
+    }
+
+    merged.metadadosDesenvolvimento = {
+      ...(merged.metadadosDesenvolvimento || {}),
+      schemaVersion: 1,
+      seedVersion: STUDIO_SEED_VERSION,
+      atualizadoEm: new Date().toISOString(),
+      origem: "catalogo-local-mesclado-com-base-atual"
+    };
+    updateQuantities(merged);
     return merged;
   }
 
@@ -916,13 +967,25 @@
       const nativeCatalog = normalizeImportedCatalog(await nativeResponse.json());
       baselineCatalog = mergeLegacySacDraft(nativeCatalog, await sacResponse.json());
       const stored = await chrome.storage.local.get(STORAGE_KEY);
-      catalog = isNativeCatalog(stored[STORAGE_KEY])
-        ? normalizeImportedCatalog(stored[STORAGE_KEY])
+      const hasStoredDraft = isNativeCatalog(stored[STORAGE_KEY]);
+      const previousSeedVersion = Number(stored[STORAGE_KEY]?.metadadosDesenvolvimento?.seedVersion || 0);
+      catalog = hasStoredDraft
+        ? mergeStoredCatalogWithBaseline(stored[STORAGE_KEY], baselineCatalog)
         : clone(baselineCatalog);
+      const repairedStoredDraft = hasStoredDraft && previousSeedVersion < STUDIO_SEED_VERSION;
+      if (repairedStoredDraft) {
+        await chrome.storage.local.set({ [STORAGE_KEY]: clone(catalog) });
+      }
       renderTagButtons();
       bindEvents();
       render();
-      setStatus(stored[STORAGE_KEY] ? "Rascunho local restaurado." : "Proposta inicial carregada e pronta para edição.");
+      setStatus(
+        repairedStoredDraft
+          ? "Rascunho restaurado e atualizado com as mensagens SAC disponíveis."
+          : hasStoredDraft
+            ? "Rascunho local restaurado."
+            : "Catálogo inicial carregado e pronto para edição."
+      );
     } catch (error) {
       setStatus(error?.message || "Falha ao iniciar o estúdio.", "error");
       elements.catalogAudit.textContent = "Não foi possível carregar o catálogo.";

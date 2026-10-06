@@ -3014,6 +3014,29 @@
 }
 
 
+.way-visita-gender-field {
+    padding:11px!important;
+
+    border:
+        1px solid
+        rgba(59,130,246,.35)!important;
+
+    border-radius:10px!important;
+
+    background:
+        rgba(59,130,246,.07)!important;
+}
+
+
+.way-visita-gender-field small {
+    color:
+        var(--way-text-muted)!important;
+
+    font-size:10px!important;
+    line-height:1.45!important;
+}
+
+
 .way-visita-preview {
     min-height:520px!important;
 }

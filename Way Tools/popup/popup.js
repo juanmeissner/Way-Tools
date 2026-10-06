@@ -75,7 +75,7 @@
   });
   const messageSectorDescriptions = Object.freeze({
     n2: "Carrega as mensagens padrão atuais e mantém as personalizações exclusivas do N2.",
-    sac: "Usa um catálogo independente. Por enquanto, o SAC começa sem mensagens padrão."
+    sac: "Usa um catálogo independente com o primeiro pacote de mensagens SAC aprovado."
   });
   const notificationDurationDescriptions = Object.freeze({
     disabled: "Não exibir notificações de novas mensagens.",

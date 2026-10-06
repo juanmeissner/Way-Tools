@@ -1,10 +1,10 @@
 # Way Tools
 
-Extensão Chrome Manifest V3 com ferramentas internas predefinidas. Ela inclui **Mensagens Personalizadas v3.10** no ChatWoot; **Matrix — Mensagens Personalizadas v1.1**, com catálogo compartilhado; **ERP — Copiar Dados v1.6**; **ERP — Gerador de Relato v1.13**, com rota dinâmica, suporte ao Way Vision, rascunho automático e estúdio visual de desenvolvimento; interfaces compactas independentes para ERP e Matrix; temas opcionais separados; **Matrix — Corrigir Colagem v3.5**; e **Corretor Ortográfico PRO v3.2** para ChatWoot, ERP e Matrix.
+Extensão Chrome Manifest V3 com ferramentas internas predefinidas. Ela inclui **Mensagens Personalizadas v3.11** no ChatWoot; **Matrix — Mensagens Personalizadas v1.2**, com catálogo compartilhado; **ERP — Copiar Dados v1.6**; **ERP — Gerador de Relato v1.13**, com rota dinâmica, suporte ao Way Vision, rascunho automático e estúdio visual de desenvolvimento; interfaces compactas independentes para ERP e Matrix; temas opcionais separados; **Matrix — Corrigir Colagem v3.5**; e **Corretor Ortográfico PRO v3.2** para ChatWoot, ERP e Matrix.
 
 Por padrão, **ERP — Gerador de Relato**, **ERP — Interface Compacta**, **Matrix — Mensagens Personalizadas**, **Matrix — Interface Compacta**, **Matrix — Tema Claro/Escuro** e **Matrix — Corrigir Colagem** iniciam ativados. O tema do ERP permanece desativado até que o usuário o habilite manualmente e continua identificado com a etiqueta **BETA**. As escolhas feitas no painel ficam preservadas no navegador.
 
-## Atualização 0.7.2 — resumo desde a versão 0.6.9
+## Atualização 0.7.3 — resumo desde a versão 0.6.9
 
 ### Mensagens e perfis de atendimento
 
@@ -13,8 +13,8 @@ Por padrão, **ERP — Gerador de Relato**, **ERP — Interface Compacta**, **Ma
 - Compartilha imediatamente o catálogo ativo entre ChatWoot e Matrix, inclusive quando as duas páginas já estão abertas.
 - Adiciona ao N2 e ao SAC os comandos `!enviarimagem`, que anexa uma imagem nativa sem enviá-la automaticamente, e `!ocorrencia`, com a orientação de indisponibilidade regional.
 - Adapta o menu de comandos ao zoom e à área visível do navegador, escolhendo automaticamente onde abrir no ChatWoot e no Matrix.
-- Acrescenta a variação `{{genero:masculino|feminino}}` e um seletor acessível por clique, setas e Enter. O `!agradecimento` passa a inserir “ajudá-lo” ou “ajudá-la” conforme a escolha, sem enviar a mensagem automaticamente.
-- Cria um estúdio de desenvolvimento para montar, revisar, ordenar, auditar, importar e exportar catálogos N2 e SAC. O rascunho inicial reúne 42 comandos planejados para o SAC, mantendo inativos os textos que ainda aguardam aprovação.
+- Acrescenta a variação `{{genero:masculino|feminino}}` e um seletor acessível por clique, setas e Enter. Os comandos de texto `!agradecimento`, `!serviconormal` e `!encerra` adaptam “ajudá-lo” ou “ajudá-la” conforme a escolha. No `!visita`, o próprio formulário identifica automaticamente o tratamento pelo primeiro nome do cliente e permite corrigi-lo antes de inserir “atendê-lo” ou “atendê-la”, sempre sem enviar a mensagem automaticamente.
+- Cria um estúdio de desenvolvimento para montar, revisar, ordenar, auditar, importar e exportar catálogos N2 e SAC. O primeiro pacote SAC reúne 12 mensagens aprovadas e ativas; outras 30 propostas permanecem visíveis no estúdio para elaboração.
 
 ### ChatWoot, notificações e diagnóstico
 
@@ -44,8 +44,8 @@ Por padrão, **ERP — Gerador de Relato**, **ERP — Interface Compacta**, **Ma
 
 ### Qualidade e empacotamento
 
-- Atualiza o Manifest V3 e o pacote para **0.7.2**, Mensagens Personalizadas para **3.10**, Matrix Mensagens para **1.1** e ERP Gerador de Relato para **1.13**.
-- Amplia a validação estrutural para 26 arquivos JavaScript e 27 recursos e adiciona 14 testes funcionais para catálogos, preferências, atualizações, backup, segurança e integrações entre ChatWoot e Matrix.
+- Atualiza o Manifest V3 e o pacote para **0.7.3**, Mensagens Personalizadas para **3.11**, Matrix Mensagens para **1.2** e ERP Gerador de Relato para **1.13**.
+- Amplia a validação estrutural para 26 arquivos JavaScript e 27 recursos e adiciona 15 testes funcionais para catálogos, preferências, atualizações, backup, segurança e integrações entre ChatWoot e Matrix.
 - Integra a geração do catálogo nativo e a sincronização da política de privacidade ao processo de empacotamento.
 
 O modo escuro do ERP inclui uma camada adaptativa para telas e modais carregados dinamicamente. Ela corrige superfícies claras, textos escuros e bordas incompatíveis, preservando as cores funcionais de alertas, estados e ações.
@@ -54,11 +54,11 @@ Os recursos do Matrix ficam em módulos próprios e não compartilham chave de a
 
 No modelo clássico do Matrix, digitar `!` no campo de mensagem abre os comandos do Way Tools. O catálogo ativo é compartilhado com o ChatWoot: inclusões, edições, exclusões, importações e restaurações feitas em qualquer um dos sistemas aparecem no outro, inclusive quando as duas páginas já estão abertas. O botão com o ícone da extensão, inserido na barra de ações do atendimento, abre a configuração das mensagens, importação e exportação JSON. As tags `{{nome}}`, `{{nomecliente}}`, `{{email}}`, `{{telefone}}`, `{{cpf}}`, `{{endereco}}` e `{{protocolo}}` são preenchidas com os dados disponíveis no atendimento; `{{nome}}` utiliza somente o primeiro nome do atendente.
 
-Mensagens podem usar a variação `{{genero:texto masculino|texto feminino}}`. Antes da inserção, o ChatWoot e o Matrix exibem um seletor grande de masculino ou feminino, operado por clique, setas e Enter. O comando `!agradecimento` usa esse recurso para inserir automaticamente “ajudá-lo” ou “ajudá-la”, mantendo também a saudação adequada para manhã, tarde ou noite e sem enviar a mensagem ao cliente.
+Mensagens podem usar a variação `{{genero:texto masculino|texto feminino}}`. Antes da inserção, o ChatWoot e o Matrix exibem um seletor grande de masculino ou feminino, operado por clique, setas e Enter. Os comandos `!agradecimento`, `!serviconormal` e `!encerra` usam esse recurso para inserir automaticamente “ajudá-lo” ou “ajudá-la”. O `!visita` não abre um segundo modal: seu próprio formulário identifica o tratamento pelo primeiro nome do cliente, mostra a forma que será utilizada e permite trocar manualmente entre “atendê-lo” e “atendê-la”. A mensagem permanece no campo para revisão e não é enviada automaticamente.
 
 O menu aberto ao digitar `!` adapta sua largura, altura e posição ao zoom do Chrome. No ChatWoot e no Matrix, ele escolhe automaticamente o lado com mais espaço, limita a lista à área visível e se reposiciona durante zoom, rolagem ou redimensionamento da janela.
 
-Na primeira abertura do painel, o usuário escolhe entre os perfis **N2** e **SAC**. O N2 mantém as mensagens padrão atuais; o SAC começa com os comandos oficiais `!enviarimagem` e `!ocorrencia` enquanto o restante do catálogo textual aguarda aprovação. Cada perfil possui versão, categorias e estado de personalização independentes, e a troca em **Configurações → Setor de atendimento** é aplicada imediatamente no ChatWoot e no Matrix. A escolha fica preservada localmente e em uma preferência sincronizada do Chrome; após atualizar a extensão, o Way Tools restaura o perfil automaticamente e só volta a perguntar quando nenhuma escolha válida puder ser recuperada.
+Na primeira abertura do painel, o usuário escolhe entre os perfis **N2** e **SAC**. O N2 mantém as mensagens padrão atuais; o SAC inclui `!enviarimagem`, `!ocorrencia` e o primeiro pacote aprovado de 12 mensagens textuais. Cada perfil possui versão, categorias e estado de personalização independentes, e a troca em **Configurações → Setor de atendimento** é aplicada imediatamente no ChatWoot e no Matrix. A escolha fica preservada localmente e em uma preferência sincronizada do Chrome; após atualizar a extensão, o Way Tools restaura o perfil automaticamente e só volta a perguntar quando nenhuma escolha válida puder ser recuperada.
 
 Na categoria **Orientações**, o comando `!enviarimagem` está disponível para N2 e SAC. Ele carrega `assets/mensagens/enviarimagem.png` e anexa o arquivo ao compositor do ChatWoot ou do Matrix para conferência, sem enviar a mensagem automaticamente.
 
@@ -72,7 +72,7 @@ Em **Configurações → Backup completo**, o usuário pode exportar todos os da
 
 O modo desenvolvedor inclui um **Estúdio de Catálogos de Mensagens** isolado dos atendimentos. Nele é possível alternar entre SAC e N2, criar, editar, duplicar, excluir e ordenar mensagens, alterar seus textos, variações por horário, automações de disponibilidade, visita e imagem, sinônimos, palavras relacionadas, tags e estado de aprovação. O mesmo ambiente cria e edita categorias compartilhadas ou exclusivas de cada perfil, mantém versões independentes, apresenta pré-visualização e auditoria estrutural, aceita importação e exporta um JSON compatível com o catálogo nativo. O rascunho é salvo em `chrome.storage.local`, sobrevive às atualizações da extensão e não altera o ChatWoot ou o Matrix até ser revisado e incorporado ao código.
 
-Na primeira abertura do estúdio, o arquivo `mensagens-sac-rascunho.json` é combinado com o catálogo nativo para disponibilizar os 42 comandos SAC planejados e o primeiro pacote recomendado de 12 mensagens. Textos ainda não elaborados aparecem como pendências, mas não impedem a exportação do rascunho. Como esses conteúdos dependem de validação comercial e contratual, nenhuma mensagem desse rascunho é ativada antes da aprovação; somente os comandos já incorporados oficialmente ficam disponíveis.
+Na primeira abertura do estúdio, o arquivo `mensagens-sac-rascunho.json` é combinado com o catálogo nativo para disponibilizar os 42 comandos SAC propostos. O primeiro pacote de 12 mensagens com conteúdo completo está aprovado e incorporado ao catálogo oficial; os outros 30 comandos aparecem como planejados e podem ser editados até que seus textos sejam concluídos. O estúdio também repara automaticamente rascunhos antigos que haviam sido salvos sem essas propostas, preservando as alterações já realizadas pelo desenvolvedor.
 
 Os pacotes oficiais usam IDs estáveis e uma camada de personalização separada. Quando uma atualização acrescentar mensagens ao N2 ou ao SAC, as novidades serão mescladas automaticamente sem substituir mensagens editadas ou criadas pelo usuário. Exclusões de mensagens oficiais também são lembradas. As categorias ficam em uma única fonte compartilhada e podem ser destinadas ao N2, ao SAC ou aos dois setores, evitando diferenças entre o ChatWoot e o Matrix.
 
@@ -166,7 +166,7 @@ Os dados ficam em `chrome.storage.local`, no perfil do navegador. Esse armazenam
 
 O painel da extensão permite adicionar correções pessoais e exceções em **Dicionário pessoal**. As alterações são sincronizadas imediatamente com as páginas compatíveis que já estiverem abertas, sem exigir recarregamento.
 
-Em uma instalação nova, o perfil N2 usa as mensagens nativas automaticamente. Se o usuário já tiver mensagens salvas em uma versão anterior, elas são migradas para o catálogo N2, têm prioridade e não são substituídas durante uma atualização. O perfil SAC começa com os comandos oficiais `!enviarimagem` e `!ocorrencia` e mantém suas próprias mensagens. Novas mensagens oficiais são incorporadas conforme a versão do pacote, preservando substituições, exclusões e mensagens pessoais. A importação JSON continua disponível para restauração de backups e conjuntos personalizados no perfil que estiver ativo.
+Em uma instalação nova, o perfil N2 usa as mensagens nativas automaticamente. Se o usuário já tiver mensagens salvas em uma versão anterior, elas são migradas para o catálogo N2, têm prioridade e não são substituídas durante uma atualização. O perfil SAC começa com `!enviarimagem`, `!ocorrencia` e as 12 mensagens do primeiro pacote aprovado, mantendo suas próprias personalizações. Novas mensagens oficiais são incorporadas conforme a versão do pacote, preservando substituições, exclusões e mensagens pessoais. A importação JSON continua disponível para restauração de backups e conjuntos personalizados no perfil que estiver ativo.
 
 ## Validar
 
@@ -174,7 +174,7 @@ Em uma instalação nova, o perfil N2 usa as mensagens nativas automaticamente. 
 npm test
 ```
 
-Além da validação estrutural da extensão, o comando executa testes funcionais dos catálogos N2 e SAC. Eles simulam ChatWoot e Matrix usando o mesmo armazenamento, troca e isolamento de perfis, atualizações oficiais futuras, preservação de personalizações e exclusões, inicialização no `chrome.storage.local`, pesquisa por sinônimos e conteúdo, favoritos, recentes, ordenação, histórico para desfazer, identificação de tags pendentes e proteção contra IDs ou comandos duplicados. O backup também é testado nos modos de exportação, mesclagem, substituição e rollback, incluindo a preservação de dados externos à extensão. O catálogo SAC é validado para garantir que seus rascunhos não sejam ativados antes da aprovação.
+Além da validação estrutural da extensão, o comando executa testes funcionais dos catálogos N2 e SAC. Eles simulam ChatWoot e Matrix usando o mesmo armazenamento, troca e isolamento de perfis, atualizações oficiais futuras, preservação de personalizações e exclusões, inicialização no `chrome.storage.local`, pesquisa por sinônimos e conteúdo, favoritos, recentes, ordenação, histórico para desfazer, identificação de tags pendentes e proteção contra IDs ou comandos duplicados. O backup também é testado nos modos de exportação, mesclagem, substituição e rollback, incluindo a preservação de dados externos à extensão. O catálogo SAC é validado para garantir que somente mensagens com conteúdo aprovado sejam ativadas, mantendo as propostas incompletas restritas ao estúdio de desenvolvimento.
 
 ## Conferir alterações desde o último commit
 
@@ -190,14 +190,14 @@ O comando usa o último commit do Git como marco e mostra sua data, título, ver
 npm run package
 ```
 
-O pacote é criado em `release/way-tools-v0.7.2.zip`.
+O pacote é criado em `release/way-tools-v0.7.3.zip`.
 
 ## Antes de publicar
 
 1. Teste a extensão no Chrome com **Carregar sem compactação** e confirme o funcionamento dentro do sistema autenticado.
 2. Se a publicação exigir a vinculação ao domínio da organização, verifique a propriedade do site no Google Search Console.
 3. No Painel do desenvolvedor da Chrome Web Store, escolha a visibilidade adequada: pública, não listada, particular ou por grupos.
-4. Envie `release/way-tools-v0.7.2.zip` para a Chrome Web Store.
+4. Envie `release/way-tools-v0.7.3.zip` para a Chrome Web Store.
 5. Para distribuição corporativa, configure a instalação e as permissões no Google Admin Console ou por Política de Grupo do Windows.
 
 A publicação e as políticas administrativas exigem acesso às contas da organização e não são realizadas automaticamente pelo projeto.
