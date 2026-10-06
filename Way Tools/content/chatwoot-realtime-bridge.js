@@ -4,7 +4,42 @@
   const BRIDGE_SOURCE = "way-tools-chatwoot-realtime";
   const COMMAND_SOURCE = "way-tools-chatwoot-command";
   const CHATWOOT_ORIGIN = "https://ia-nocodb.internetway.com.br";
+  const BRIDGE_SENTINEL = "__WAY_TOOLS_CHATWOOT_REALTIME_BRIDGE_V2__";
+  const LEGACY_DUPLICATE_ATTRIBUTE = "data-way-tools-legacy-duplicate";
   const SYNC_INTERVAL_MS = 60_000;
+  const LEGACY_CHECK_INTERVAL_MS = 4_000;
+
+  function postBridgeStatus(type, payload = {}) {
+    window.postMessage({
+      source: BRIDGE_SOURCE,
+      type,
+      payload
+    }, CHATWOOT_ORIGIN);
+  }
+
+  function signalLegacyDuplicate(reason) {
+    globalThis.document?.documentElement?.setAttribute?.(
+      LEGACY_DUPLICATE_ATTRIBUTE,
+      "true"
+    );
+    postBridgeStatus("legacy-duplicate", { reason });
+  }
+
+  if (window[BRIDGE_SENTINEL]?.generation >= 2) {
+    postBridgeStatus("ready");
+    return;
+  }
+
+  if (window.WebSocket?.name === "WayToolsWebSocket") {
+    signalLegacyDuplicate("preexisting-way-tools-websocket");
+    postBridgeStatus("ready");
+    return;
+  }
+
+  Object.defineProperty(window, BRIDGE_SENTINEL, {
+    configurable: true,
+    value: Object.freeze({ generation: 2 })
+  });
   const EVENT_NAMES = new Set([
     "message.created",
     "assignee.changed",
@@ -50,6 +85,35 @@
     }
 
     return `${normalized.slice(0, Math.max(1, maximumLength - 1)).trimEnd()}…`;
+  }
+
+  function lastMessageWasFromAgent(message) {
+    if (!message || typeof message !== "object" || message.private === true) {
+      return null;
+    }
+
+    const messageType = Number(message.message_type);
+
+    if (messageType === 1) {
+      return true;
+    }
+
+    if (messageType === 0) {
+      return false;
+    }
+
+    const senderType = normalizeText(message.sender_type || message.sender?.type, 30)
+      .toLocaleLowerCase("pt-BR");
+
+    if (senderType === "contact") {
+      return false;
+    }
+
+    if (["user", "agent", "administrator"].includes(senderType)) {
+      return true;
+    }
+
+    return null;
   }
 
   function parseJson(value) {
@@ -142,6 +206,7 @@
       messageId: toInteger(latestMessage?.id),
       messageType: latestMessage?.message_type ?? null,
       senderType: normalizeText(latestMessage?.sender_type || latestMessage?.sender?.type, 30),
+      lastMessageFromAgent: lastMessageWasFromAgent(latestMessage),
       unreadCount: toInteger(conversation.unread_count) ?? 0,
       lastActivityAt: Number(conversation.last_activity_at) || 0,
       waitingSince: Number(conversation.waiting_since) || 0,
@@ -172,6 +237,7 @@
         messageType: data.message_type ?? null,
         senderType: normalizeText(data.sender_type || data.sender?.type, 30),
         private: data.private === true,
+        lastMessageFromAgent: lastMessageWasFromAgent(data),
         customerName: normalizeText(data.sender?.name, 80),
         preview: normalizeText(data.content || data.processed_message_content, 220),
         assigneeId: toInteger(data.conversation?.assignee_id),
@@ -250,6 +316,15 @@
   WayToolsWebSocket.prototype = NativeWebSocket.prototype;
   Object.setPrototypeOf(WayToolsWebSocket, NativeWebSocket);
   window.WebSocket = WayToolsWebSocket;
+
+  setInterval(() => {
+    if (
+      window.WebSocket !== WayToolsWebSocket &&
+      window.WebSocket?.name === "WayToolsWebSocket"
+    ) {
+      signalLegacyDuplicate("way-tools-websocket-replaced");
+    }
+  }, LEGACY_CHECK_INTERVAL_MS);
 
   function isChatwootApiUrl(value) {
     try {

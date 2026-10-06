@@ -1,5 +1,5 @@
 /*
- * Way Tools - Mensagens Personalizadas v3.7
+ * Way Tools - Mensagens Personalizadas v3.10
  * Adaptado do userscript fornecido para o runtime nativo da extensão.
  */
 
@@ -11,7 +11,7 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
 // ==UserScript==
 // @name         Way - Mensagens Personalizadas
 // @namespace    way-mensagens-personalizadas
-// @version      3.7
+// @version      3.10
 // @description  Mensagens personalizadas com dados do cliente, tags globais, autocomplete, visita técnica, alertas de inatividade, notificações de novas mensagens e backup JSON
 // @match        https://ia-nocodb.internetway.com.br/*
 // @run-at       document-start
@@ -47,8 +47,32 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
     };
 
 
-    const SHARED_MESSAGES_KEY =
+    const LEGACY_SHARED_MESSAGES_KEY =
         'messages.catalog.v1';
+
+
+    const MESSAGE_SECTOR_KEY =
+        'messages.sector.v1';
+
+
+    const MESSAGE_CATALOG_KEYS =
+        Object.freeze({
+            n2: 'messages.catalog.n2.v1',
+            sac: 'messages.catalog.sac.v1'
+        });
+
+
+    const MESSAGE_CATALOG_MANAGER =
+        globalThis.WayToolsMessageCatalogs;
+
+
+    let setorMensagensAtivo =
+        normalizarSetorMensagens(
+            storage.getSharedValue(
+                MESSAGE_SECTOR_KEY,
+                null
+            )
+        );
 
 
     const ALERTAS_INATIVIDADE_PADRAO = {
@@ -58,7 +82,9 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
         vermelho: 10,
         notificarAmarelo: true,
         notificarLaranja: true,
-        notificarVermelho: true
+        notificarVermelho: true,
+        somenteUltimaMensagemAgente: true,
+        alertaVisualSomenteUltimaMensagemAgente: false
     };
 
 
@@ -95,6 +121,26 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
         'wayTools:cancelChatwootInactivity';
 
 
+    const TIPO_RECONCILIAR_INATIVIDADE =
+        'wayTools:reconcileChatwootInactivity';
+
+
+    const TIPO_COORDENAR_NOTIFICACOES =
+        'wayTools:setChatwootNotificationOwner';
+
+
+    const ID_AVISO_CONTEXTO_INVALIDADO =
+        'way-tools-extension-context-invalidated';
+
+
+    const ID_AVISO_INSTALACAO_DUPLICADA =
+        'way-tools-duplicate-installation-warning';
+
+
+    const ATRIBUTO_INSTALACAO_LEGADA_DUPLICADA =
+        'data-way-tools-legacy-duplicate';
+
+
     const PREFERENCIAS_NOTIFICACOES = {
         notificarEmPrimeiroPlano: false
     };
@@ -125,6 +171,54 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
         userId: null,
         conversas: new Map()
     };
+
+
+    const ESTADO_CONTEXTO_EXTENSAO = {
+        invalido: false,
+        avisoExibido: false
+    };
+
+
+    const ESTADO_COORDENACAO_NOTIFICACOES = {
+        proprietaria: true,
+        duplicada: false,
+        legadoDetectado: false,
+        ownerId: null,
+        ownerVersion: null
+    };
+
+
+    chrome.runtime.onMessage.addListener(
+        function (
+            mensagem,
+            _remetente,
+            responder
+        ) {
+            if (
+                mensagem?.type !==
+                'wayTools:getDiagnostics'
+            ) {
+                return false;
+            }
+
+            responder({
+                profile: obterNomePerfilAtivo(),
+                duplicateInstallation:
+                    ESTADO_COORDENACAO_NOTIFICACOES.duplicada === true ||
+                    ESTADO_COORDENACAO_NOTIFICACOES.legadoDetectado === true,
+                notificationOwner:
+                    ESTADO_COORDENACAO_NOTIFICACOES.proprietaria === true,
+                realtimeActive:
+                    ESTADO_CHATWOOT_REALTIME.ativo === true,
+                trackedConversations:
+                    ESTADO_CHATWOOT_REALTIME.conversas.size,
+                contextInvalidated:
+                    ESTADO_CONTEXTO_EXTENSAO.invalido === true
+            });
+
+            return false;
+        }
+    );
 
 
     const NIVEIS_NOTIFICACAO_INATIVIDADE = Object.freeze({
@@ -187,55 +281,57 @@ globalThis.WayToolsRuntime.run("way-mensagens", (storage) => {
        CATEGORIAS
        ========================================================= */
 
-    const CATEGORIAS = {
-        abertura: {
-            label: '👋 Abertura de atendimento'
-        },
-
-        diagnostico: {
-            label: '🔎 Diagnóstico inicial'
-        },
-
-        ajustes: {
-            label: '🛠️ Ajustes na conexão'
-        },
-
-        agendamento: {
-            label: '📅 Agendamento de visita técnica'
-        },
-
-        ausencia: {
-            label: '⏳ Gestão de ausência'
-        },
-
-        encerramento: {
-            label: '✅ Encerramento de atendimento'
-        },
-
-        iptv: {
-            label: '📺 IPTV'
-        },
-
-        cameras: {
-            label: '🎥 Câmeras'
-        },
-
-        documentos: {
-            label: '📄 Solicitação de documentos'
-        },
-
-        velocidade: {
-            label: '🚀 Teste de velocidade'
-        },
-
-        orientacoes: {
-            label: '📡 Orientações'
+    function obterCategoriasMensagensSetor(
+        setor = setorMensagensAtivo
+    ) {
+        if (
+            MESSAGE_CATALOG_MANAGER &&
+            typeof MESSAGE_CATALOG_MANAGER.categoryMap ===
+                'function'
+        ) {
+            return MESSAGE_CATALOG_MANAGER.categoryMap(
+                setor
+            );
         }
-    };
+
+
+        return {};
+    }
+
+
+    let CATEGORIAS =
+        obterCategoriasMensagensSetor();
 
 
     const CATEGORIA_SEM_CATEGORIA =
         '__sem_categoria__';
+
+    const CATEGORIA_FAVORITOS =
+        '__favoritos__';
+
+    const CATEGORIA_RECENTES =
+        '__recentes__';
+
+
+    function obterExperienciaMensagens() {
+        return MESSAGE_CATALOG_MANAGER?.experienceWithStorage?.(
+            storage,
+            setorMensagensAtivo
+        ) || {
+            favorites: [],
+            recent: [],
+            categoryOrder: [],
+            messageOrder: {},
+            history: []
+        };
+    }
+
+
+    function obterNomePerfilAtivo() {
+        return setorMensagensAtivo === 'sac'
+            ? 'SAC'
+            : 'N2';
+    }
 
 
     /* =========================================================
@@ -659,6 +755,24 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                     padrao.notificarVermelho
                     :
                     origem.notificarVermelho ===
+                    true,
+
+            somenteUltimaMensagemAgente:
+                origem.somenteUltimaMensagemAgente ===
+                undefined
+                    ?
+                    padrao.somenteUltimaMensagemAgente
+                    :
+                    origem.somenteUltimaMensagemAgente ===
+                    true,
+
+            alertaVisualSomenteUltimaMensagemAgente:
+                origem.alertaVisualSomenteUltimaMensagemAgente ===
+                undefined
+                    ?
+                    padrao.alertaVisualSomenteUltimaMensagemAgente
+                    :
+                    origem.alertaVisualSomenteUltimaMensagemAgente ===
                     true,
 
             amarelo:
@@ -2102,63 +2216,34 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     function enviarNotificacaoNovaMensagem(
         dados
     ) {
-        try {
-            chrome.runtime.sendMessage(
-                {
-                    type:
-                        'wayTools:iaMessageNotification',
+        enviarMensagemBackground(
+            {
+                type:
+                    'wayTools:iaMessageNotification',
 
-                    conversationKey:
-                        dados.chave,
+                conversationKey:
+                    dados.chave,
 
-                    fingerprint:
-                        dados.assinatura,
+                fingerprint:
+                    dados.assinatura,
 
-                    customerName:
-                        dados.nomeCliente,
+                customerName:
+                    dados.nomeCliente,
 
-                    preview:
-                        dados.previa,
+                preview:
+                    dados.previa,
 
-                    url:
-                        dados.url
-                },
+                url:
+                    dados.url
+            },
+            {
+                falha:
+                    '[Way Mensagens] Não foi possível exibir a notificação:',
 
-                resposta => {
-                    const erro =
-                        chrome.runtime.lastError;
-
-
-                    if (
-                        erro
-                    ) {
-                        console.warn(
-                            '[Way Mensagens] Não foi possível exibir a notificação:',
-                            erro.message
-                        );
-
-                        return;
-                    }
-
-
-                    if (
-                        resposta?.ok ===
-                        false
-                    ) {
-                        console.warn(
-                            '[Way Mensagens] Notificação recusada:',
-                            resposta.error
-                        );
-                    }
-                }
-            );
-
-        } catch (erro) {
-            console.warn(
-                '[Way Mensagens] Falha ao solicitar notificação:',
-                erro
-            );
-        }
+                recusada:
+                    '[Way Mensagens] Notificação recusada:'
+            }
+        );
     }
 
 
@@ -2236,6 +2321,81 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     }
 
 
+    function identificarUltimaMensagemDoAgente(
+        dados
+    ) {
+        if (
+            typeof dados?.lastMessageFromAgent ===
+            'boolean'
+        ) {
+            return dados.lastMessageFromAgent;
+        }
+
+
+        if (
+            dados?.private ===
+            true
+        ) {
+            return null;
+        }
+
+
+        const tipoMensagem =
+            Number(
+                dados?.messageType
+            );
+
+
+        if (
+            tipoMensagem ===
+            1
+        ) {
+            return true;
+        }
+
+
+        if (
+            tipoMensagem ===
+            0
+        ) {
+            return false;
+        }
+
+
+        const tipoRemetente =
+            normalizarEspacos(
+                dados?.senderType
+            )
+                .toLocaleLowerCase(
+                    'pt-BR'
+                );
+
+
+        if (
+            tipoRemetente ===
+            'contact'
+        ) {
+            return false;
+        }
+
+
+        if (
+            [
+                'user',
+                'agent',
+                'administrator'
+            ].includes(
+                tipoRemetente
+            )
+        ) {
+            return true;
+        }
+
+
+        return null;
+    }
+
+
     function configuracaoInatividadeParaBackground() {
         const configuracao =
             carregarConfiguracaoAlertasInatividade();
@@ -2272,9 +2432,470 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     }
 
 
-    function enviarMensagemBackground(
-        mensagem
+    function tipoMensagemDependeDaPropriedadeNotificacoes(
+        tipo
     ) {
+        return [
+            'wayTools:iaMessageNotification',
+            TIPO_SINCRONIZAR_INATIVIDADE,
+            TIPO_CANCELAR_INATIVIDADE,
+            TIPO_RECONCILIAR_INATIVIDADE
+        ].includes(
+            tipo
+        );
+    }
+
+
+    function removerAvisoInstalacaoDuplicada() {
+        document.getElementById(
+            ID_AVISO_INSTALACAO_DUPLICADA
+        )?.remove();
+    }
+
+
+    function exibirAvisoInstalacaoDuplicada(
+        estado
+    ) {
+        if (
+            document.getElementById(
+                ID_AVISO_INSTALACAO_DUPLICADA
+            )
+        ) {
+            return;
+        }
+
+
+        const renderizar =
+            () => {
+                if (
+                    !document.body ||
+                    document.getElementById(
+                        ID_AVISO_INSTALACAO_DUPLICADA
+                    )
+                ) {
+                    return;
+                }
+
+
+                const aviso =
+                    document.createElement(
+                        'aside'
+                    );
+
+
+                aviso.id =
+                    ID_AVISO_INSTALACAO_DUPLICADA;
+
+
+                aviso.setAttribute(
+                    'role',
+                    'alert'
+                );
+
+
+                aviso.style.cssText =
+                    'position:fixed;top:16px;right:16px;z-index:2147483647;display:flex;align-items:flex-start;gap:12px;max-width:440px;padding:14px 16px;border:1px solid #f59e0b;border-radius:12px;background:#451a03;color:#fff7ed;box-shadow:0 16px 40px rgba(0,0,0,.35);font:600 13px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+
+
+                const texto =
+                    document.createElement(
+                        'span'
+                    );
+
+
+                texto.textContent =
+                    `Outra instalação do Way Tools foi detectada. As notificações desta cópia v${estado?.version || '?'} foram pausadas para evitar duplicidade. Mantenha somente a extensão oficial da Chrome Web Store e recarregue esta página.`;
+
+
+                const botao =
+                    document.createElement(
+                        'button'
+                    );
+
+
+                botao.type =
+                    'button';
+
+
+                botao.textContent =
+                    'Fechar';
+
+
+                botao.setAttribute(
+                    'aria-label',
+                    'Fechar aviso de instalação duplicada'
+                );
+
+
+                botao.style.cssText =
+                    'flex:none;padding:6px 9px;border:1px solid rgba(255,255,255,.3);border-radius:8px;background:transparent;color:inherit;font:700 12px/1.2 inherit;cursor:pointer';
+
+
+                botao.addEventListener(
+                    'click',
+                    () => aviso.remove()
+                );
+
+
+                aviso.append(
+                    texto,
+                    botao
+                );
+
+
+                document.body.appendChild(
+                    aviso
+                );
+            };
+
+
+        if (
+            document.body
+        ) {
+            renderizar();
+
+        } else {
+            document.addEventListener(
+                'DOMContentLoaded',
+                renderizar,
+                {
+                    once: true
+                }
+            );
+        }
+    }
+
+
+    function iniciarCoordenacaoNotificacoes() {
+        const coordenador =
+            globalThis
+                .WayToolsInstanceCoordinator;
+
+
+        if (
+            !coordenador?.subscribe
+        ) {
+            return;
+        }
+
+
+        coordenador.subscribe(
+            estado => {
+                const eraProprietaria =
+                    ESTADO_COORDENACAO_NOTIFICACOES
+                        .proprietaria;
+
+
+                ESTADO_COORDENACAO_NOTIFICACOES.proprietaria =
+                    estado.isOwner ===
+                        true &&
+                    ESTADO_COORDENACAO_NOTIFICACOES
+                        .legadoDetectado !==
+                        true;
+
+
+                ESTADO_COORDENACAO_NOTIFICACOES.duplicada =
+                    estado.hasDuplicate ===
+                    true;
+
+
+                ESTADO_COORDENACAO_NOTIFICACOES.ownerId =
+                    estado.ownerId ||
+                    null;
+
+
+                ESTADO_COORDENACAO_NOTIFICACOES.ownerVersion =
+                    estado.ownerVersion ||
+                    null;
+
+
+                enviarMensagemBackground(
+                    {
+                        type:
+                            TIPO_COORDENAR_NOTIFICACOES,
+
+                        enabled:
+                            ESTADO_COORDENACAO_NOTIFICACOES
+                                .proprietaria
+                    },
+                    {},
+                    {
+                        ignorarCoordenacao:
+                            true
+                    }
+                );
+
+
+                if (
+                    estado.hasDuplicate ===
+                        true &&
+                    ESTADO_COORDENACAO_NOTIFICACOES
+                        .proprietaria !==
+                        true
+                ) {
+                    exibirAvisoInstalacaoDuplicada(
+                        estado
+                    );
+
+                } else if (
+                    estado.hasDuplicate !==
+                    true
+                ) {
+                    removerAvisoInstalacaoDuplicada();
+                }
+
+
+                if (
+                    !eraProprietaria &&
+                    ESTADO_COORDENACAO_NOTIFICACOES
+                        .proprietaria ===
+                        true
+                ) {
+                    reagendarConversasRealtime();
+                    solicitarSincronizacaoRealtime();
+                }
+            }
+        );
+    }
+
+
+    function registrarInstalacaoLegadaDuplicada() {
+        if (
+            ESTADO_COORDENACAO_NOTIFICACOES
+                .legadoDetectado
+        ) {
+            return;
+        }
+
+
+        ESTADO_COORDENACAO_NOTIFICACOES.legadoDetectado =
+            true;
+
+
+        ESTADO_COORDENACAO_NOTIFICACOES.duplicada =
+            true;
+
+
+        ESTADO_COORDENACAO_NOTIFICACOES.proprietaria =
+            false;
+
+
+        const estado =
+            globalThis
+                .WayToolsInstanceCoordinator
+                ?.getState?.() ||
+            {};
+
+
+        enviarMensagemBackground(
+            {
+                type:
+                    TIPO_COORDENAR_NOTIFICACOES,
+
+                enabled:
+                    false
+            },
+            {},
+            {
+                ignorarCoordenacao:
+                    true
+            }
+        );
+
+
+        exibirAvisoInstalacaoDuplicada(
+            estado
+        );
+    }
+
+
+    function contextoExtensaoDisponivel() {
+        try {
+            return Boolean(
+                globalThis.chrome?.runtime?.id
+            );
+
+        } catch {
+            return false;
+        }
+    }
+
+
+    function erroIndicaContextoInvalidado(
+        erro
+    ) {
+        return String(
+            erro?.message ||
+            erro ||
+            ''
+        )
+            .toLocaleLowerCase(
+                'en-US'
+            )
+            .includes(
+                'extension context invalidated'
+            );
+    }
+
+
+    function exibirAvisoContextoInvalidado() {
+        if (
+            ESTADO_CONTEXTO_EXTENSAO
+                .avisoExibido
+        ) {
+            return;
+        }
+
+
+        ESTADO_CONTEXTO_EXTENSAO.avisoExibido =
+            true;
+
+
+        const renderizar =
+            () => {
+                if (
+                    !document.body ||
+                    document.getElementById(
+                        ID_AVISO_CONTEXTO_INVALIDADO
+                    )
+                ) {
+                    return;
+                }
+
+
+                const aviso =
+                    document.createElement(
+                        'aside'
+                    );
+
+
+                aviso.id =
+                    ID_AVISO_CONTEXTO_INVALIDADO;
+
+
+                aviso.setAttribute(
+                    'role',
+                    'alert'
+                );
+
+
+                aviso.style.cssText =
+                    'position:fixed;top:16px;right:16px;z-index:2147483647;display:flex;align-items:center;gap:12px;max-width:420px;padding:14px 16px;border:1px solid #38bdf8;border-radius:12px;background:#082f49;color:#f8fafc;box-shadow:0 16px 40px rgba(0,0,0,.35);font:600 13px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+
+
+                const texto =
+                    document.createElement(
+                        'span'
+                    );
+
+
+                texto.textContent =
+                    'O Way Tools foi atualizado. Recarregue esta página para continuar recebendo notificações.';
+
+
+                const botao =
+                    document.createElement(
+                        'button'
+                    );
+
+
+                botao.type =
+                    'button';
+
+
+                botao.textContent =
+                    'Recarregar agora';
+
+
+                botao.style.cssText =
+                    'flex:none;padding:8px 10px;border:0;border-radius:8px;background:#0ea5e9;color:#fff;font:700 12px/1.2 inherit;cursor:pointer';
+
+
+                botao.addEventListener(
+                    'click',
+                    () => window.location.reload()
+                );
+
+
+                aviso.append(
+                    texto,
+                    botao
+                );
+
+
+                document.body.appendChild(
+                    aviso
+                );
+            };
+
+
+        if (
+            document.body
+        ) {
+            renderizar();
+
+        } else {
+            document.addEventListener(
+                'DOMContentLoaded',
+                renderizar,
+                {
+                    once: true
+                }
+            );
+        }
+    }
+
+
+    function invalidarContextoExtensao() {
+        if (
+            ESTADO_CONTEXTO_EXTENSAO
+                .invalido
+        ) {
+            return;
+        }
+
+
+        ESTADO_CONTEXTO_EXTENSAO.invalido =
+            true;
+
+
+        ESTADO_CHATWOOT_REALTIME.ativo =
+            false;
+
+
+        exibirAvisoContextoInvalidado();
+    }
+
+
+    function enviarMensagemBackground(
+        mensagem,
+        rotulos = {},
+        opcoes = {}
+    ) {
+        if (
+            opcoes.ignorarCoordenacao !==
+                true &&
+            tipoMensagemDependeDaPropriedadeNotificacoes(
+                mensagem?.type
+            ) &&
+            ESTADO_COORDENACAO_NOTIFICACOES
+                .proprietaria !==
+                true
+        ) {
+            return false;
+        }
+
+
+        if (
+            ESTADO_CONTEXTO_EXTENSAO
+                .invalido ||
+            !contextoExtensaoDisponivel()
+        ) {
+            invalidarContextoExtensao();
+            return false;
+        }
+
+
         try {
             chrome.runtime.sendMessage(
                 mensagem,
@@ -2286,7 +2907,19 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                     if (
                         erro
                     ) {
+                        if (
+                            erroIndicaContextoInvalidado(
+                                erro
+                            ) ||
+                            !contextoExtensaoDisponivel()
+                        ) {
+                            invalidarContextoExtensao();
+                            return;
+                        }
+
+
                         console.warn(
+                            rotulos.falha ||
                             '[Way Mensagens] Falha na sincronização em segundo plano:',
                             erro.message
                         );
@@ -2300,6 +2933,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                         false
                     ) {
                         console.warn(
+                            rotulos.recusada ||
                             '[Way Mensagens] Sincronização em segundo plano recusada:',
                             resposta.error
                         );
@@ -2307,12 +2941,74 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 }
             );
 
+
+            return true;
+
         } catch (erro) {
+            if (
+                erroIndicaContextoInvalidado(
+                    erro
+                ) ||
+                !contextoExtensaoDisponivel()
+            ) {
+                invalidarContextoExtensao();
+                return false;
+            }
+
+
             console.warn(
                 '[Way Mensagens] Não foi possível sincronizar a conversa:',
                 erro
             );
+
+
+            return false;
         }
+    }
+
+
+    function cancelarAgendamentoInatividadeRealtime(
+        conversationId,
+        accountId
+    ) {
+        const id =
+            Number(
+                conversationId
+            );
+
+
+        const conta =
+            Number(
+                accountId
+            );
+
+
+        if (
+            !Number.isInteger(
+                id
+            ) ||
+            !Number.isInteger(
+                conta
+            ) ||
+            conta <=
+                0
+        ) {
+            return;
+        }
+
+
+        enviarMensagemBackground(
+            {
+                type:
+                    TIPO_CANCELAR_INATIVIDADE,
+
+                accountId:
+                    conta,
+
+                conversationId:
+                    id
+            }
+        );
     }
 
 
@@ -2386,17 +3082,9 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             accountId;
 
 
-        enviarMensagemBackground(
-            {
-                type:
-                    TIPO_CANCELAR_INATIVIDADE,
-
-                accountId:
-                    accountId,
-
-                conversationId:
-                    id
-            }
+        cancelarAgendamentoInatividadeRealtime(
+            id,
+            accountId
         );
     }
 
@@ -2476,13 +3164,44 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             );
 
 
+        const configuracaoAlertas =
+            carregarConfiguracaoAlertasInatividade();
+
+
         const configuracaoBackground =
             configuracaoInatividadeParaBackground();
 
 
+        const ultimaMensagemDoAgenteRecebida =
+            identificarUltimaMensagemDoAgente(
+                dados
+            );
+
+
+        const ultimaMensagemDoAgente =
+            typeof ultimaMensagemDoAgenteRecebida ===
+            'boolean'
+                ?
+                ultimaMensagemDoAgenteRecebida
+                :
+                typeof anterior.lastMessageFromAgent ===
+                'boolean'
+                    ?
+                    anterior.lastMessageFromAgent
+                    :
+                    null;
+
+
         const assinaturaConfiguracao =
             JSON.stringify(
-                configuracaoBackground
+                {
+                    levels:
+                        configuracaoBackground,
+
+                    somenteUltimaMensagemAgente:
+                        configuracaoAlertas
+                            .somenteUltimaMensagemAgente
+                }
             );
 
 
@@ -2532,6 +3251,8 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 atividadeAtual ||
                 anterior.lastActivityAt ||
                 Date.now(),
+            lastMessageFromAgent:
+                ultimaMensagemDoAgente,
             assinaturaConfiguracao
         };
 
@@ -2550,6 +3271,8 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             !anterior.lastActivityAt ||
             anterior.lastActivityAt !==
                 conversa.lastActivityAt ||
+            anterior.lastMessageFromAgent !==
+                conversa.lastMessageFromAgent ||
             anterior.assinaturaConfiguracao !==
                 assinaturaConfiguracao;
 
@@ -2557,40 +3280,62 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         if (
             precisaReagendar
         ) {
-            enviarMensagemBackground(
-                {
-                    type:
-                        TIPO_SINCRONIZAR_INATIVIDADE,
+            if (
+                configuracaoAlertas
+                    .somenteUltimaMensagemAgente ===
+                    true &&
+                conversa.lastMessageFromAgent !==
+                    true
+            ) {
+                cancelarAgendamentoInatividadeRealtime(
+                    conversa.conversationId,
+                    conversa.accountId
+                );
 
-                    conversation:
-                        {
-                            accountId:
-                                conversa.accountId,
+            } else {
+                enviarMensagemBackground(
+                    {
+                        type:
+                            TIPO_SINCRONIZAR_INATIVIDADE,
 
-                            conversationId:
-                                conversa.conversationId,
+                        conversation:
+                            {
+                                accountId:
+                                    conversa.accountId,
 
-                            customerName:
-                                conversa.customerName,
+                                conversationId:
+                                    conversa.conversationId,
 
-                            preview:
-                                conversa.preview,
+                                customerName:
+                                    conversa.customerName,
 
-                            url:
-                                conversa.url,
+                                preview:
+                                    conversa.preview,
 
-                            lastActivityAt:
-                                conversa.lastActivityAt
-                        },
+                                url:
+                                    conversa.url,
 
-                    levels:
-                        configuracaoBackground,
+                                lastActivityAt:
+                                    conversa.lastActivityAt,
 
-                    suppressPastLevels:
-                        opcoes.suppressPastLevels ===
-                        true
-                }
-            );
+                                lastMessageFromAgent:
+                                    conversa.lastMessageFromAgent
+                            },
+
+                        levels:
+                            configuracaoBackground,
+
+                        requireAgentLastMessage:
+                            configuracaoAlertas
+                                .somenteUltimaMensagemAgente ===
+                                true,
+
+                        suppressPastLevels:
+                            opcoes.suppressPastLevels ===
+                            true
+                    }
+                );
+            }
         }
 
 
@@ -2758,6 +3503,29 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                             id
                         )
                 );
+
+
+            if (
+                Number.isInteger(
+                    accountId
+                ) &&
+                accountId >
+                    0
+            ) {
+                enviarMensagemBackground(
+                    {
+                        type:
+                            TIPO_RECONCILIAR_INATIVIDADE,
+
+                        accountId,
+
+                        conversationIds:
+                            Array.from(
+                                recebidas
+                            )
+                    }
+                );
+            }
         }
     }
 
@@ -2839,6 +3607,16 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
     function iniciarMonitorRealtimeChatWoot() {
+        if (
+            document.documentElement
+                ?.hasAttribute(
+                    ATRIBUTO_INSTALACAO_LEGADA_DUPLICADA
+                )
+        ) {
+            registrarInstalacaoLegadaDuplicada();
+        }
+
+
         window.addEventListener(
             'message',
             evento => {
@@ -2850,6 +3628,23 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                     evento.data?.source !==
                         CHATWOOT_REALTIME_SOURCE
                 ) {
+                    return;
+                }
+
+
+                if (
+                    ESTADO_CONTEXTO_EXTENSAO
+                        .invalido
+                ) {
+                    return;
+                }
+
+
+                if (
+                    evento.data.type ===
+                    'legacy-duplicate'
+                ) {
+                    registrarInstalacaoLegadaDuplicada();
                     return;
                 }
 
@@ -2978,6 +3773,25 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 card,
                 nomeCliente
             );
+
+
+        if (
+            configuracao
+                .somenteUltimaMensagemAgente ===
+                true &&
+            !ultimaMensagemFoiDoAtendente(
+                card
+            )
+        ) {
+            ESTADO_NOTIFICACOES_INATIVIDADE
+                .conversas
+                .delete(
+                    chave
+                );
+
+
+            return;
+        }
 
 
         const estadoAnterior =
@@ -3383,6 +4197,8 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
         if (
+            !ESTADO_CONTEXTO_EXTENSAO
+                .invalido &&
             !ESTADO_CHATWOOT_REALTIME
                 .ativo
         ) {
@@ -3439,6 +4255,8 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
                 if (
+                    !ESTADO_CONTEXTO_EXTENSAO
+                        .invalido &&
                     !ESTADO_CHATWOOT_REALTIME
                         .ativo &&
                     cardsNotificaveis.has(
@@ -3454,10 +4272,20 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                 }
 
 
+                const alertaVisualPermitido =
+                    configuracao
+                        .alertaVisualSomenteUltimaMensagemAgente !==
+                        true ||
+                    ultimaMensagemFoiDoAtendente(
+                        card
+                    );
+
+
                 if (
                     !configuracao.ativo ||
                     nivel ===
-                    'normal'
+                    'normal' ||
+                    !alertaVisualPermitido
                 ) {
                     return;
                 }
@@ -5359,7 +6187,45 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
        STORAGE
        ========================================================= */
 
-    function obterMensagensNativas() {
+    function normalizarSetorMensagens(
+        valor
+    ) {
+        return normalizarEspacos(
+            valor
+        )
+            .toLocaleLowerCase(
+                'pt-BR'
+            ) === 'sac'
+            ? 'sac'
+            : 'n2';
+    }
+
+
+    function obterChaveCatalogoMensagens(
+        setor = setorMensagensAtivo
+    ) {
+        return MESSAGE_CATALOG_KEYS[
+            normalizarSetorMensagens(
+                setor
+            )
+        ];
+    }
+
+
+    function obterMensagensNativas(
+        setor = setorMensagensAtivo
+    ) {
+        if (
+            MESSAGE_CATALOG_MANAGER &&
+            typeof MESSAGE_CATALOG_MANAGER.nativeMessages ===
+                'function'
+        ) {
+            return MESSAGE_CATALOG_MANAGER.nativeMessages(
+                setor
+            );
+        }
+
+
         const mensagens =
             globalThis
                 .WAY_TOOLS_NATIVE_MESSAGES;
@@ -5384,41 +6250,88 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
     function carregarMensagens() {
         try {
+            const chaveCatalogo =
+                obterChaveCatalogoMensagens();
+
+
             const compartilhadas =
                 storage.getSharedValue(
-                    SHARED_MESSAGES_KEY,
+                    chaveCatalogo,
                     null
                 );
 
 
             if (
-                Array.isArray(
+                !Array.isArray(
                     compartilhadas
-                )
+                ) &&
+                setorMensagensAtivo ===
+                'n2'
             ) {
-                return compartilhadas;
+                const compartilhadasLegadas =
+                    storage.getSharedValue(
+                        LEGACY_SHARED_MESSAGES_KEY,
+                        null
+                    );
+
+
+                if (
+                    Array.isArray(
+                        compartilhadasLegadas
+                    )
+                ) {
+                    storage.setSharedValue(
+                        chaveCatalogo,
+                        compartilhadasLegadas
+                    );
+                }
+                else {
+                    const dados =
+                        GM_getValue(
+                            CONFIG.storageKey,
+                            null
+                        );
+
+
+                    if (
+                        Array.isArray(
+                            dados
+                        )
+                    ) {
+                        storage.setSharedValue(
+                            chaveCatalogo,
+                            dados
+                        );
+                    }
+                }
             }
 
 
-            const dados =
-                GM_getValue(
-                    CONFIG.storageKey,
+            if (
+                MESSAGE_CATALOG_MANAGER &&
+                typeof MESSAGE_CATALOG_MANAGER.ensureWithStorage ===
+                    'function'
+            ) {
+                return MESSAGE_CATALOG_MANAGER.ensureWithStorage(
+                    storage,
+                    setorMensagensAtivo
+                );
+            }
+
+
+            const catalogoAtual =
+                storage.getSharedValue(
+                    chaveCatalogo,
                     null
                 );
 
 
             if (
                 Array.isArray(
-                    dados
+                    catalogoAtual
                 )
             ) {
-                storage.setSharedValue(
-                    SHARED_MESSAGES_KEY,
-                    dados
-                );
-
-
-                return dados;
+                return catalogoAtual;
             }
 
 
@@ -5427,7 +6340,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
             storage.setSharedValue(
-                SHARED_MESSAGES_KEY,
+                chaveCatalogo,
                 nativas
             );
 
@@ -5447,13 +6360,39 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
     function salvarMensagens(
-        mensagens
+        mensagens,
+        acao = 'Alteração no catálogo',
+        registrarHistorico = true
     ) {
         try {
-            storage.setSharedValue(
-                SHARED_MESSAGES_KEY,
-                mensagens
-            );
+            if (
+                registrarHistorico
+            ) {
+                MESSAGE_CATALOG_MANAGER?.recordHistoryWithStorage?.(
+                    storage,
+                    setorMensagensAtivo,
+                    acao,
+                    carregarMensagens()
+                );
+            }
+
+            if (
+                MESSAGE_CATALOG_MANAGER &&
+                typeof MESSAGE_CATALOG_MANAGER.saveWithStorage ===
+                    'function'
+            ) {
+                MESSAGE_CATALOG_MANAGER.saveWithStorage(
+                    storage,
+                    setorMensagensAtivo,
+                    mensagens
+                );
+            }
+            else {
+                storage.setSharedValue(
+                    obterChaveCatalogoMensagens(),
+                    mensagens
+                );
+            }
 
 
             return true;
@@ -5470,12 +6409,10 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     }
 
 
-    storage.onSharedValueChanged(
-        SHARED_MESSAGES_KEY,
-
-        function (
-            novasMensagens
-        ) {
+    function atualizarCatalogoMensagensAberto(
+        novasMensagens,
+        forcarFormulario = false
+    ) {
             if (
                 !Array.isArray(
                     novasMensagens
@@ -5488,6 +6425,22 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
             fecharAutocomplete();
 
             renderizarLista();
+
+
+            if (
+                forcarFormulario
+            ) {
+                mensagemEmEdicaoId =
+                    null;
+
+
+                renderizarFormulario(
+                    null
+                );
+
+
+                return;
+            }
 
 
             const formulario =
@@ -5531,6 +6484,93 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                     );
                 }
             }
+    }
+
+
+    Object.entries(
+        MESSAGE_CATALOG_KEYS
+    ).forEach(
+        ([setor, chaveCatalogo]) => {
+            storage.onSharedValueChanged(
+                chaveCatalogo,
+
+                function (
+                    novasMensagens
+                ) {
+                    if (
+                        setor !==
+                        setorMensagensAtivo
+                    ) {
+                        return;
+                    }
+
+
+                    atualizarCatalogoMensagensAberto(
+                        novasMensagens
+                    );
+                }
+            );
+        }
+    );
+
+
+    Object.entries(
+        MESSAGE_CATALOG_MANAGER?.experienceKeys ||
+        {}
+    ).forEach(
+        ([setor, chaveExperiencia]) => {
+            storage.onSharedValueChanged(
+                chaveExperiencia,
+
+                function () {
+                    if (
+                        setor !==
+                        setorMensagensAtivo
+                    ) {
+                        return;
+                    }
+
+                    renderizarLista();
+                }
+            );
+        }
+    );
+
+
+    storage.onSharedValueChanged(
+        MESSAGE_SECTOR_KEY,
+
+        function (
+            novoSetor
+        ) {
+            const setorNormalizado =
+                normalizarSetorMensagens(
+                    novoSetor
+                );
+
+
+            if (
+                setorNormalizado ===
+                setorMensagensAtivo
+            ) {
+                return;
+            }
+
+
+            setorMensagensAtivo =
+                setorNormalizado;
+
+
+            CATEGORIAS =
+                obterCategoriasMensagensSetor(
+                    setorMensagensAtivo
+                );
+
+
+            atualizarCatalogoMensagensAberto(
+                carregarMensagens(),
+                true
+            );
         }
     );
 
@@ -5583,6 +6623,20 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     function obterNomeCategoria(
         categoria
     ) {
+        if (
+            categoria ===
+            CATEGORIA_FAVORITOS
+        ) {
+            return '⭐ Favoritos';
+        }
+
+        if (
+            categoria ===
+            CATEGORIA_RECENTES
+        ) {
+            return '🕘 Usados recentemente';
+        }
+
         if (
             categoria &&
             CATEGORIAS[
@@ -5670,41 +6724,57 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         const mensagens =
             carregarMensagens();
 
+        const experiencia =
+            obterExperienciaMensagens();
+
 
         const resultado =
             [];
 
 
-        Object.entries(
-            CATEGORIAS
-        )
+        const categoriasOrdenadas =
+            MESSAGE_CATALOG_MANAGER?.sortCategories
+                ? MESSAGE_CATALOG_MANAGER.sortCategories(
+                    Object.entries(CATEGORIAS).map(
+                        ([id, categoria], ordem) => ({
+                            id,
+                            label: categoria.label,
+                            ordem
+                        })
+                    ),
+                    experiencia
+                )
+                : Object.entries(CATEGORIAS).map(
+                    ([id, categoria], ordem) => ({
+                        id,
+                        label: categoria.label,
+                        ordem
+                    })
+                );
+
+
+        categoriasOrdenadas
             .forEach(
-                ([
-                    id,
-                    categoria
-                ]) => {
-                    const comandos =
+                categoria => {
+                    const comandosEncontrados =
                         mensagens
                             .filter(
                                 mensagem =>
                                     mensagemPertenceCategoria(
                                         mensagem,
-                                        id
+                                        categoria.id
                                     )
+                            );
+
+                    const comandos =
+                        MESSAGE_CATALOG_MANAGER?.sortMessages
+                            ? MESSAGE_CATALOG_MANAGER.sortMessages(
+                                comandosEncontrados,
+                                categoria.id,
+                                experiencia
                             )
-                            .sort(
-                                (
-                                    a,
-                                    b
-                                ) =>
-                                    String(
-                                        a.comando
-                                    )
-                                        .localeCompare(
-                                            String(
-                                                b.comando
-                                            )
-                                        )
+                            : comandosEncontrados.sort(
+                                (a, b) => String(a.comando).localeCompare(String(b.comando))
                             );
 
 
@@ -5716,7 +6786,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
 
 
                     resultado.push({
-                        id,
+                        id: categoria.id,
                         label:
                             categoria.label,
 
@@ -5727,6 +6797,55 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
                     });
                 }
             );
+
+
+        const idsFavoritos =
+            new Set(
+                experiencia.favorites ||
+                []
+            );
+
+        const favoritos =
+            mensagens.filter(
+                mensagem =>
+                    idsFavoritos.has(
+                        mensagem.id
+                    )
+            );
+
+        if (favoritos.length) {
+            resultado.unshift({
+                id: CATEGORIA_FAVORITOS,
+                label: '⭐ Favoritos',
+                quantidade: favoritos.length,
+                comandos: favoritos
+            });
+        }
+
+        const mensagensPorId =
+            new Map(
+                mensagens.map(
+                    mensagem => [mensagem.id, mensagem]
+                )
+            );
+
+        const recentes =
+            (experiencia.recent || [])
+                .map(registro => mensagensPorId.get(registro.id))
+                .filter(Boolean);
+
+        if (recentes.length) {
+            resultado.splice(
+                favoritos.length ? 1 : 0,
+                0,
+                {
+                    id: CATEGORIA_RECENTES,
+                    label: '🕘 Usados recentemente',
+                    quantidade: recentes.length,
+                    comandos: recentes
+                }
+            );
+        }
 
 
         const semCategoria =
@@ -5780,27 +6899,61 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     function obterMensagensCategoria(
         categoria
     ) {
-        return carregarMensagens()
+        const mensagens =
+            carregarMensagens();
+
+        const experiencia =
+            obterExperienciaMensagens();
+
+        if (
+            categoria ===
+            CATEGORIA_FAVORITOS
+        ) {
+            const favoritos =
+                new Set(
+                    experiencia.favorites ||
+                    []
+                );
+
+            return mensagens.filter(
+                mensagem => favoritos.has(mensagem.id)
+            );
+        }
+
+        if (
+            categoria ===
+            CATEGORIA_RECENTES
+        ) {
+            const mensagensPorId =
+                new Map(
+                    mensagens.map(
+                        mensagem => [mensagem.id, mensagem]
+                    )
+                );
+
+            return (experiencia.recent || [])
+                .map(registro => mensagensPorId.get(registro.id))
+                .filter(Boolean);
+        }
+
+        const mensagensCategoria =
+            mensagens
             .filter(
                 mensagem =>
                     mensagemPertenceCategoria(
                         mensagem,
                         categoria
                     )
+            );
+
+        return MESSAGE_CATALOG_MANAGER?.sortMessages
+            ? MESSAGE_CATALOG_MANAGER.sortMessages(
+                mensagensCategoria,
+                categoria,
+                experiencia
             )
-            .sort(
-                (
-                    a,
-                    b
-                ) =>
-                    String(
-                        a.comando
-                    )
-                        .localeCompare(
-                            String(
-                                b.comando
-                            )
-                        )
+            : mensagensCategoria.sort(
+                (a, b) => String(a.comando).localeCompare(String(b.comando))
             );
     }
 
@@ -5883,7 +7036,7 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
     }
 
 
-    function obterTextoMensagem(
+    function obterTextoBrutoPorPeriodo(
         mensagem
     ) {
         if (
@@ -5913,8 +7066,80 @@ Estamos à disposição e teremos prazer em atendê-lo! 😊`;
         }
 
 
+        return texto;
+    }
+
+
+    function possuiVariacaoGenero(
+        texto
+    ) {
+        return /\{\{\s*genero\s*:\s*[^|{}]+\|[^{}]+\}\}/iu.test(
+            String(
+                texto ||
+                ''
+            )
+        );
+    }
+
+
+    function resolverVariacaoGenero(
+        texto,
+        genero = ''
+    ) {
+        return String(
+            texto ||
+            ''
+        ).replace(
+            /\{\{\s*genero\s*:\s*([^|{}]+?)\s*\|\s*([^{}]+?)\s*\}\}/giu,
+            (
+                correspondencia,
+                masculino,
+                feminino
+            ) => {
+                if (
+                    genero ===
+                    'masculino'
+                ) {
+                    return masculino.trim();
+                }
+
+
+                if (
+                    genero ===
+                    'feminino'
+                ) {
+                    return feminino.trim();
+                }
+
+
+                return `${masculino.trim()} / ${feminino.trim()}`;
+            }
+        );
+    }
+
+
+    function mensagemPossuiVariacaoGenero(
+        mensagem
+    ) {
+        return possuiVariacaoGenero(
+            obterTextoBrutoPorPeriodo(
+                mensagem
+            )
+        );
+    }
+
+
+    function obterTextoMensagem(
+        mensagem,
+        genero = ''
+    ) {
         return aplicarTagsGlobais(
-            texto
+            resolverVariacaoGenero(
+                obterTextoBrutoPorPeriodo(
+                    mensagem
+                ),
+                genero
+            )
         );
     }
 
@@ -6691,2867 +7916,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
        ========================================================= */
 
     function adicionarCSS() {
-        if (
-            document.getElementById(
-                'way-msg-personalizadas-css'
-            )
-        ) {
-            return;
-        }
-
-
-        const style =
-            document.createElement(
-                'style'
-            );
-
-
-        style.id =
-            'way-msg-personalizadas-css';
-
-
-        style.textContent = `
-
-            :root,
-            :root.way-msg-theme-dark {
-                --way-page:#0f1115;
-                --way-panel:#16181d;
-                --way-panel-2:#1c1f25;
-                --way-panel-3:#13151a;
-                --way-input:#111318;
-                --way-hover:#202b3a;
-                --way-hover-2:#292d35;
-                --way-border:#343942;
-                --way-border-soft:#292d35;
-                --way-text:#e5e7eb;
-                --way-text-strong:#f8fafc;
-                --way-text-soft:#9ca3af;
-                --way-text-muted:#64748b;
-                --way-blue:#3b82f6;
-                --way-blue-bg:#2563eb;
-                --way-blue-hover:#1d4ed8;
-                --way-shadow:rgba(0,0,0,.58);
-                --way-overlay:rgba(0,0,0,.76);
-                --way-color-scheme:dark;
-
-                --way-inactivity-yellow-bg:rgba(234,179,8,.08);
-                --way-inactivity-yellow-bg-hover:rgba(234,179,8,.13);
-                --way-inactivity-yellow-border:rgba(250,204,21,.34);
-                --way-inactivity-yellow-text:#facc15;
-                --way-inactivity-yellow-time-bg:rgba(234,179,8,.13);
-
-                --way-inactivity-orange-bg:rgba(249,115,22,.11);
-                --way-inactivity-orange-bg-hover:rgba(249,115,22,.17);
-                --way-inactivity-orange-border:rgba(251,146,60,.45);
-                --way-inactivity-orange-text:#fb923c;
-                --way-inactivity-orange-time-bg:rgba(249,115,22,.16);
-
-                --way-inactivity-red-bg:rgba(239,68,68,.13);
-                --way-inactivity-red-bg-hover:rgba(239,68,68,.19);
-                --way-inactivity-red-border:rgba(248,113,113,.52);
-                --way-inactivity-red-text:#f87171;
-                --way-inactivity-red-time-bg:rgba(239,68,68,.18);
-            }
-
-
-            :root.way-msg-theme-light {
-                --way-page:#eef1f5;
-                --way-panel:#ffffff;
-                --way-panel-2:#f7f8fa;
-                --way-panel-3:#f3f5f7;
-                --way-input:#ffffff;
-                --way-hover:#edf4ff;
-                --way-hover-2:#e9edf2;
-                --way-border:#d5dae1;
-                --way-border-soft:#e3e6eb;
-                --way-text:#27303f;
-                --way-text-strong:#111827;
-                --way-text-soft:#667085;
-                --way-text-muted:#8892a0;
-                --way-blue:#2563eb;
-                --way-blue-bg:#2563eb;
-                --way-blue-hover:#1d4ed8;
-                --way-shadow:rgba(15,23,42,.20);
-                --way-overlay:rgba(15,23,42,.36);
-                --way-color-scheme:light;
-
-                --way-inactivity-yellow-bg:rgba(250,204,21,.10);
-                --way-inactivity-yellow-bg-hover:rgba(250,204,21,.16);
-                --way-inactivity-yellow-border:rgba(202,138,4,.28);
-                --way-inactivity-yellow-text:#a16207;
-                --way-inactivity-yellow-time-bg:rgba(250,204,21,.16);
-
-                --way-inactivity-orange-bg:rgba(249,115,22,.10);
-                --way-inactivity-orange-bg-hover:rgba(249,115,22,.15);
-                --way-inactivity-orange-border:rgba(234,88,12,.34);
-                --way-inactivity-orange-text:#c2410c;
-                --way-inactivity-orange-time-bg:rgba(249,115,22,.15);
-
-                --way-inactivity-red-bg:rgba(239,68,68,.09);
-                --way-inactivity-red-bg-hover:rgba(239,68,68,.14);
-                --way-inactivity-red-border:rgba(220,38,38,.36);
-                --way-inactivity-red-text:#dc2626;
-                --way-inactivity-red-time-bg:rgba(239,68,68,.13);
-            }
-
-
-            /* =================================================
-               ALERTA DE INATIVIDADE
-               ================================================= */
-
-            .conversation.way-msg-inactivity-yellow {
-                background:
-                    var(--way-inactivity-yellow-bg) !important;
-
-                border-bottom-color:
-                    var(--way-inactivity-yellow-border) !important;
-
-                box-shadow:
-                    inset 3px 0 0
-                    var(--way-inactivity-yellow-text) !important;
-            }
-
-
-            .conversation.way-msg-inactivity-yellow:hover {
-                background:
-                    var(--way-inactivity-yellow-bg-hover) !important;
-            }
-
-
-            .conversation.way-msg-inactivity-orange {
-                background:
-                    var(--way-inactivity-orange-bg) !important;
-
-                border-bottom-color:
-                    var(--way-inactivity-orange-border) !important;
-
-                box-shadow:
-                    inset 3px 0 0
-                    var(--way-inactivity-orange-text) !important;
-            }
-
-
-            .conversation.way-msg-inactivity-orange:hover {
-                background:
-                    var(--way-inactivity-orange-bg-hover) !important;
-            }
-
-
-            .conversation.way-msg-inactivity-red {
-                background:
-                    var(--way-inactivity-red-bg) !important;
-
-                border-bottom-color:
-                    var(--way-inactivity-red-border) !important;
-
-                box-shadow:
-                    inset 3px 0 0
-                    var(--way-inactivity-red-text) !important;
-            }
-
-
-            .conversation.way-msg-inactivity-red:hover {
-                background:
-                    var(--way-inactivity-red-bg-hover) !important;
-            }
-
-
-            .conversation.way-msg-inactivity-yellow
-            .conversation--user,
-            .conversation.way-msg-inactivity-orange
-            .conversation--user,
-            .conversation.way-msg-inactivity-red
-            .conversation--user {
-                color:
-                    var(--way-text-strong) !important;
-            }
-
-
-            .way-msg-inactivity-time {
-                font-weight:
-                    700 !important;
-
-                border-radius:
-                    5px !important;
-
-                padding:
-                    1px 4px !important;
-            }
-
-
-            .way-msg-inactivity-time-yellow {
-                color:
-                    var(--way-inactivity-yellow-text) !important;
-
-                background:
-                    var(--way-inactivity-yellow-time-bg) !important;
-
-                box-shadow:
-                    inset 0 0 0 1px
-                    var(--way-inactivity-yellow-border) !important;
-            }
-
-
-            .way-msg-inactivity-time-orange {
-                color:
-                    var(--way-inactivity-orange-text) !important;
-
-                background:
-                    var(--way-inactivity-orange-time-bg) !important;
-
-                box-shadow:
-                    inset 0 0 0 1px
-                    var(--way-inactivity-orange-border) !important;
-            }
-
-
-            .way-msg-inactivity-time-red {
-                color:
-                    var(--way-inactivity-red-text) !important;
-
-                background:
-                    var(--way-inactivity-red-time-bg) !important;
-
-                font-weight:
-                    800 !important;
-
-                box-shadow:
-                    inset 0 0 0 1px
-                    var(--way-inactivity-red-border) !important;
-            }
-
-
-            /* =================================================
-               BOTÃO COPIAR CLIENTE
-               ================================================= */
-
-            .way-msg-copy-client-data {
-                display:inline-flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-                flex-shrink:0!important;
-
-                width:27px!important;
-                min-width:27px!important;
-                height:27px!important;
-                min-height:27px!important;
-
-                padding:0!important;
-                margin:0!important;
-
-                border:
-                    1px solid
-                    rgba(59,130,246,.30)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    rgba(59,130,246,.08)!important;
-
-                color:#3b82f6!important;
-
-                cursor:pointer!important;
-                outline:none!important;
-                box-shadow:none!important;
-            }
-
-
-            .way-msg-copy-client-data:hover {
-                background:
-                    rgba(59,130,246,.16)!important;
-
-                border-color:
-                    #3b82f6!important;
-            }
-
-
-            .way-msg-copy-client-data:active {
-                transform:
-                    scale(.94)!important;
-            }
-
-
-            .way-msg-copy-client-data svg {
-                display:block!important;
-                width:16px!important;
-                height:16px!important;
-                min-width:16px!important;
-                min-height:16px!important;
-                pointer-events:none!important;
-                stroke:currentColor!important;
-            }
-
-
-            .way-msg-client-copy-success {
-                color:#16a34a!important;
-
-                border-color:
-                    rgba(22,163,74,.45)!important;
-
-                background:
-                    rgba(22,163,74,.12)!important;
-            }
-
-
-            /* =================================================
-               MENU
-               ================================================= */
-
-            .way-msg-menu-item {
-                position:relative!important;
-            }
-
-
-            .way-msg-menu-link {
-                cursor:pointer!important;
-            }
-
-
-            /* =================================================
-               MODAL PRINCIPAL
-               ================================================= */
-
-            .way-msg-overlay {
-                position:fixed!important;
-                inset:0!important;
-                z-index:2147483646!important;
-
-                display:flex!important;
-
-                width:100vw!important;
-                height:100vh!important;
-
-                margin:0!important;
-                padding:0!important;
-
-                background:
-                    var(--way-page)!important;
-
-                color-scheme:
-                    var(--way-color-scheme)!important;
-            }
-
-
-            .way-msg-modal {
-                display:flex!important;
-                flex-direction:column!important;
-
-                width:100vw!important;
-                height:100vh!important;
-
-                overflow:hidden!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                font-family:
-                    inherit!important;
-            }
-
-
-            .way-msg-header {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:space-between!important;
-
-                min-height:68px!important;
-
-                padding:
-                    10px 18px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                border-bottom:
-                    1px solid
-                    var(--way-border)!important;
-
-                gap:16px!important;
-            }
-
-
-            .way-msg-header-left {
-                display:flex!important;
-                flex-direction:column!important;
-
-                min-width:0!important;
-
-                gap:2px!important;
-            }
-
-
-            .way-msg-title {
-                margin:0!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:18px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-subtitle {
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:11px!important;
-            }
-
-
-            .way-msg-header-actions {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:7px!important;
-            }
-
-
-            .way-msg-header-backup {
-                display:inline-flex!important;
-                align-items:center!important;
-
-                gap:6px!important;
-
-                padding-right:9px!important;
-
-                border-right:
-                    1px solid
-                    var(--way-border)!important;
-            }
-
-
-            .way-msg-backup-button {
-                min-height:32px!important;
-
-                padding:
-                    5px 10px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                cursor:pointer!important;
-
-                font:inherit!important;
-                font-size:10px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-msg-backup-button:hover {
-                background:
-                    var(--way-hover)!important;
-
-                border-color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-msg-export {
-                color:#16a34a!important;
-            }
-
-
-            .way-msg-import {
-                color:#3b82f6!important;
-            }
-
-
-            .way-msg-close {
-                width:36px!important;
-                height:36px!important;
-
-                border:0!important;
-                border-radius:7px!important;
-
-                background:
-                    transparent!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                cursor:pointer!important;
-
-                font-size:24px!important;
-            }
-
-
-            .way-msg-close:hover {
-                background:
-                    var(--way-hover-2)!important;
-
-                color:
-                    var(--way-text-strong)!important;
-            }
-
-
-            .way-msg-backup-status {
-                display:none!important;
-
-                margin-top:3px!important;
-
-                font-size:10px!important;
-            }
-
-
-            .way-msg-backup-status.success {
-                display:block!important;
-                color:#10b981!important;
-            }
-
-
-            .way-msg-backup-status.error {
-                display:block!important;
-                color:#ef4444!important;
-            }
-
-
-            /* =================================================
-               ABAS DE CONFIGURAÇÃO
-               ================================================= */
-
-            .way-msg-config-tabs {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:6px!important;
-
-                padding:
-                    8px 18px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                border-bottom:
-                    1px solid
-                    var(--way-border)!important;
-            }
-
-
-            .way-msg-config-tab {
-                min-height:32px!important;
-
-                padding:
-                    5px 11px!important;
-
-                border:
-                    1px solid
-                    transparent!important;
-
-                border-radius:7px!important;
-
-                background:
-                    transparent!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                cursor:pointer!important;
-
-                font:inherit!important;
-                font-size:10px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-config-tab:hover {
-                background:
-                    var(--way-hover)!important;
-
-                color:
-                    var(--way-text)!important;
-            }
-
-
-            .way-msg-config-tab.active {
-                border-color:
-                    rgba(59,130,246,.35)!important;
-
-                background:
-                    rgba(59,130,246,.12)!important;
-
-                color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-msg-body.way-msg-alertas-mode {
-                grid-template-columns:
-                    minmax(0,1fr)!important;
-            }
-
-
-            .way-msg-body.way-msg-alertas-mode
-            .way-msg-sidebar {
-                display:none!important;
-            }
-
-
-
-            /* =================================================
-               TELA DE EXIBIÇÃO - ALERTAS DE INATIVIDADE
-               Mantém a barra lateral nativa visível.
-               ================================================= */
-
-            .way-alert-display-screen {
-                position:fixed!important;
-
-                top:0!important;
-                bottom:0!important;
-                right:0;
-
-                z-index:35!important;
-
-                min-width:0!important;
-
-                overflow:hidden!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                color:
-                    var(--way-text)!important;
-            }
-
-
-            .way-alert-display-scroll {
-                width:100%!important;
-                height:100%!important;
-
-                min-width:0!important;
-
-                box-sizing:border-box!important;
-            }
-
-
-            .way-alert-display-editor {
-                min-height:0!important;
-
-                padding:0!important;
-
-                overflow:visible!important;
-
-                background:
-                    transparent!important;
-            }
-
-
-            [data-way-alert-menu="true"].way-alert-menu-active
-            > .way-alert-menu-link {
-                background:
-                    var(--way-hover)!important;
-
-                color:
-                    var(--way-text-strong)!important;
-            }
-
-
-            [data-way-alert-menu="true"].way-alert-menu-active
-            .i-lucide-clock-alert {
-                color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-alert-config {
-                display:flex!important;
-                flex-direction:column!important;
-
-                max-width:980px!important;
-
-                gap:16px!important;
-            }
-
-
-            .way-alert-config-title {
-                margin:0!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:18px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-alert-config-description {
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:11px!important;
-                line-height:1.6!important;
-            }
-
-
-            .way-alert-toggle {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:10px!important;
-
-                padding:12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-            }
-
-
-            .way-alert-toggle input {
-                width:17px!important;
-                height:17px!important;
-
-                accent-color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-alert-toggle-title {
-                display:block!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:11px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-alert-toggle-description {
-                display:block!important;
-
-                margin-top:2px!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-alert-levels {
-                display:grid!important;
-
-                grid-template-columns:
-                    repeat(
-                        3,
-                        minmax(0,1fr)
-                    )!important;
-
-                gap:12px!important;
-            }
-
-
-            .way-alert-level {
-                padding:14px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:9px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-            }
-
-
-            .way-alert-level.yellow {
-                border-left:
-                    4px solid
-                    var(--way-inactivity-yellow-text)!important;
-            }
-
-
-            .way-alert-level.orange {
-                border-left:
-                    4px solid
-                    var(--way-inactivity-orange-text)!important;
-            }
-
-
-            .way-alert-level.red {
-                border-left:
-                    4px solid
-                    var(--way-inactivity-red-text)!important;
-            }
-
-
-            .way-alert-level-title {
-                margin-bottom:9px!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:11px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-alert-field {
-                display:flex!important;
-                flex-direction:column!important;
-
-                gap:6px!important;
-            }
-
-
-            .way-alert-field label {
-                color:
-                    var(--way-text)!important;
-
-                font-size:10px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-alert-field input {
-                width:100%!important;
-                min-height:38px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                padding:
-                    8px 10px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                outline:none!important;
-
-                background:
-                    var(--way-input)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                color-scheme:
-                    var(--way-color-scheme)!important;
-            }
-
-
-            .way-alert-notification-toggle {
-                display:flex!important;
-                align-items:flex-start!important;
-
-                gap:8px!important;
-
-                margin-top:12px!important;
-                padding-top:10px!important;
-
-                border-top:
-                    1px solid
-                    var(--way-border)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                cursor:pointer!important;
-
-                font-size:9px!important;
-                line-height:1.45!important;
-            }
-
-
-            .way-alert-notification-toggle input {
-                width:15px!important;
-                height:15px!important;
-
-                flex:0 0 auto!important;
-
-                margin-top:1px!important;
-
-                accent-color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-alert-notification-info {
-                padding:10px 12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    var(--way-blue-bg)!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:9px!important;
-                line-height:1.55!important;
-            }
-
-
-            .way-alert-summary {
-                padding:12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    var(--way-panel-3)!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:10px!important;
-                line-height:1.8!important;
-            }
-
-
-            .way-alert-preview {
-                display:grid!important;
-
-                grid-template-columns:
-                    repeat(
-                        3,
-                        minmax(0,1fr)
-                    )!important;
-
-                gap:8px!important;
-            }
-
-
-            .way-alert-preview-card {
-                padding:
-                    10px 12px!important;
-
-                border-radius:7px!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:10px!important;
-            }
-
-
-            .way-alert-preview-card.yellow {
-                background:
-                    var(--way-inactivity-yellow-bg)!important;
-
-                border-left:
-                    3px solid
-                    var(--way-inactivity-yellow-text)!important;
-            }
-
-
-            .way-alert-preview-card.orange {
-                background:
-                    var(--way-inactivity-orange-bg)!important;
-
-                border-left:
-                    3px solid
-                    var(--way-inactivity-orange-text)!important;
-            }
-
-
-            .way-alert-preview-card.red {
-                background:
-                    var(--way-inactivity-red-bg)!important;
-
-                border-left:
-                    3px solid
-                    var(--way-inactivity-red-text)!important;
-            }
-
-
-            .way-alert-status {
-                min-height:18px!important;
-
-                font-size:11px!important;
-            }
-
-
-            .way-alert-status.success {
-                color:#10b981!important;
-            }
-
-
-            .way-alert-status.error {
-                color:#ef4444!important;
-            }
-
-
-            .way-alert-actions {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:flex-end!important;
-
-                gap:8px!important;
-            }
-
-
-            .way-alert-actions button {
-                min-height:35px!important;
-
-                padding:
-                    6px 13px!important;
-
-                border-radius:7px!important;
-
-                cursor:pointer!important;
-
-                font-size:11px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-alert-reset {
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                color:
-                    var(--way-text)!important;
-            }
-
-
-            .way-alert-save {
-                border:
-                    1px solid
-                    var(--way-blue)!important;
-
-                background:
-                    var(--way-blue-bg)!important;
-
-                color:#fff!important;
-            }
-
-
-            /* =================================================
-               CORPO
-               ================================================= */
-
-            .way-msg-body {
-                display:grid!important;
-
-                grid-template-columns:
-                    370px
-                    minmax(0,1fr)!important;
-
-                flex:1 1 auto!important;
-
-                min-height:0!important;
-
-                overflow:hidden!important;
-            }
-
-
-            .way-msg-sidebar {
-                display:flex!important;
-                flex-direction:column!important;
-
-                min-height:0!important;
-
-                padding:16px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                background:
-                    var(--way-panel-3)!important;
-
-                border-right:
-                    1px solid
-                    var(--way-border)!important;
-            }
-
-
-            .way-msg-new {
-                width:100%!important;
-
-                min-height:38px!important;
-
-                border:
-                    1px solid
-                    var(--way-blue)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-blue-bg)!important;
-
-                color:#fff!important;
-
-                cursor:pointer!important;
-
-                font-size:12px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-msg-new:hover {
-                background:
-                    var(--way-blue-hover)!important;
-            }
-
-
-            .way-msg-list {
-                display:flex!important;
-                flex-direction:column!important;
-
-                flex:1 1 auto!important;
-
-                min-height:0!important;
-
-                gap:7px!important;
-
-                margin-top:12px!important;
-
-                overflow-y:auto!important;
-            }
-
-
-            .way-msg-empty {
-                padding:
-                    22px 10px!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                text-align:center!important;
-
-                font-size:12px!important;
-                line-height:1.5!important;
-            }
-
-
-            .way-msg-list-item {
-                display:flex!important;
-                align-items:flex-start!important;
-                justify-content:space-between!important;
-
-                gap:8px!important;
-
-                padding:10px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                cursor:pointer!important;
-            }
-
-
-            .way-msg-list-item:hover,
-            .way-msg-list-item.active {
-                background:
-                    var(--way-hover)!important;
-
-                border-color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-msg-list-item.active {
-                box-shadow:
-                    inset 3px 0 0
-                    var(--way-blue)!important;
-            }
-
-
-            .way-msg-list-main {
-                flex:1 1 auto!important;
-                min-width:0!important;
-            }
-
-
-            .way-msg-command {
-                display:block!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-list-description,
-            .way-msg-list-category {
-                display:block!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-            }
-
-
-            .way-msg-list-description {
-                margin-top:3px!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:10px!important;
-            }
-
-
-            .way-msg-list-category {
-                margin-top:5px!important;
-
-                color:
-                    var(--way-text-muted)!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-msg-badge {
-                flex-shrink:0!important;
-
-                padding:
-                    2px 6px!important;
-
-                border-radius:999px!important;
-
-                background:
-                    rgba(14,165,233,.10)!important;
-
-                color:#0284c7!important;
-
-                font-size:9px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-badge-agenda {
-                color:#a855f7!important;
-
-                background:
-                    rgba(168,85,247,.10)!important;
-            }
-
-
-            .way-msg-badge-visita {
-                color:#d97706!important;
-
-                background:
-                    rgba(245,158,11,.10)!important;
-            }
-
-
-            /* =================================================
-               EDITOR
-               ================================================= */
-
-            .way-msg-editor {
-                min-height:0!important;
-
-                padding:
-                    22px 28px!important;
-
-                overflow-y:auto!important;
-
-                background:
-                    var(--way-panel)!important;
-            }
-
-
-            .way-msg-editor-placeholder {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-
-                min-height:
-                    calc(100vh - 130px)!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                text-align:center!important;
-
-                font-size:13px!important;
-            }
-
-
-            .way-msg-form {
-                display:flex!important;
-                flex-direction:column!important;
-
-                min-height:100%!important;
-
-                gap:16px!important;
-            }
-
-
-            .way-msg-field,
-            .way-visita-field {
-                display:flex!important;
-                flex-direction:column!important;
-
-                gap:6px!important;
-            }
-
-
-            .way-msg-field label,
-            .way-visita-field label {
-                color:
-                    var(--way-text)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-field input,
-            .way-msg-field select,
-            .way-msg-field textarea,
-            .way-msg-periodo-card textarea,
-            .way-visita-field input,
-            .way-visita-field select,
-            .way-visita-field textarea {
-                width:100%!important;
-
-                box-sizing:
-                    border-box!important;
-
-                padding:
-                    10px 12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                outline:none!important;
-
-                background:
-                    var(--way-input)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                caret-color:
-                    var(--way-blue)!important;
-
-                font-family:
-                    inherit!important;
-
-                font-size:13px!important;
-
-                color-scheme:
-                    var(--way-color-scheme)!important;
-            }
-
-
-            .way-msg-field input,
-            .way-msg-field select {
-                min-height:40px!important;
-            }
-
-
-            .way-msg-field textarea {
-                min-height:280px!important;
-
-                resize:vertical!important;
-
-                line-height:1.5!important;
-            }
-
-
-            .way-msg-template-visita {
-                min-height:440px!important;
-            }
-
-
-            .way-msg-command-wrapper {
-                display:flex!important;
-                align-items:stretch!important;
-            }
-
-
-            .way-msg-command-prefix {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-
-                min-width:42px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-right:0!important;
-
-                border-radius:
-                    7px 0 0 7px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                color:
-                    var(--way-blue)!important;
-
-                font-size:15px!important;
-                font-weight:800!important;
-            }
-
-
-            .way-msg-command-wrapper input {
-                border-radius:
-                    0 7px 7px 0!important;
-            }
-
-
-            .way-msg-category-info {
-                padding:
-                    9px 11px!important;
-
-                border:
-                    1px solid
-                    rgba(99,102,241,.25)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    rgba(99,102,241,.07)!important;
-
-                color:#6366f1!important;
-
-                font-size:10px!important;
-                line-height:1.5!important;
-            }
-
-
-            /* =================================================
-               TAGS
-               ================================================= */
-
-            .way-msg-tags-box,
-            .way-msg-visita-tags-box {
-                padding:12px!important;
-
-                border:
-                    1px solid
-                    rgba(14,165,233,.30)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    rgba(14,165,233,.07)!important;
-            }
-
-
-            .way-msg-tags-title {
-                display:block!important;
-
-                margin-bottom:8px!important;
-
-                color:#0284c7!important;
-
-                font-size:11px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-global-tags-grid {
-                display:grid!important;
-
-                grid-template-columns:
-                    repeat(
-                        2,
-                        minmax(0,1fr)
-                    )!important;
-
-                gap:7px!important;
-            }
-
-
-            .way-msg-global-tag {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:8px!important;
-
-                min-width:0!important;
-
-                padding:
-                    7px 9px!important;
-
-                border:
-                    1px solid
-                    var(--way-border-soft)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-input)!important;
-            }
-
-
-            .way-msg-tag-code {
-                flex-shrink:0!important;
-
-                padding:
-                    3px 7px!important;
-
-                border:
-                    1px solid
-                    rgba(56,189,248,.30)!important;
-
-                border-radius:5px!important;
-
-                color:#0284c7!important;
-
-                font-family:
-                    Consolas,
-                    Monaco,
-                    monospace!important;
-
-                font-size:10px!important;
-                font-weight:700!important;
-
-                user-select:all!important;
-            }
-
-
-            .way-msg-global-tag-main {
-                min-width:0!important;
-
-                display:flex!important;
-                flex-direction:column!important;
-
-                gap:2px!important;
-            }
-
-
-            .way-msg-global-tag-label {
-                color:
-                    var(--way-text)!important;
-
-                font-size:10px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-msg-global-tag-value {
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-msg-global-tag-value.ok {
-                color:#10b981!important;
-            }
-
-
-            .way-msg-global-tag-value.pending {
-                color:#f59e0b!important;
-            }
-
-
-            .way-msg-visita-tag-list {
-                display:flex!important;
-                flex-wrap:wrap!important;
-
-                gap:6px!important;
-            }
-
-
-            .way-msg-visita-tag {
-                padding:
-                    4px 7px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:6px!important;
-
-                background:
-                    var(--way-input)!important;
-
-                color:#0284c7!important;
-
-                cursor:pointer!important;
-
-                font-family:
-                    Consolas,
-                    Monaco,
-                    monospace!important;
-
-                font-size:10px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-tags-detectadas {
-                margin-top:10px!important;
-                padding-top:10px!important;
-
-                border-top:
-                    1px solid
-                    var(--way-border-soft)!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:10px!important;
-            }
-
-
-            /* =================================================
-               HORÁRIOS
-               ================================================= */
-
-            .way-msg-check {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:10px!important;
-
-                padding:
-                    11px 12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                cursor:pointer!important;
-            }
-
-
-            .way-msg-check input {
-                width:17px!important;
-                height:17px!important;
-
-                accent-color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-msg-check-text {
-                display:flex!important;
-                flex-direction:column!important;
-            }
-
-
-            .way-msg-check-title {
-                color:
-                    var(--way-text)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-check-description {
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:10px!important;
-            }
-
-
-            .way-msg-periodos {
-                display:grid!important;
-
-                grid-template-columns:
-                    repeat(
-                        3,
-                        minmax(0,1fr)
-                    )!important;
-
-                gap:14px!important;
-            }
-
-
-            .way-msg-periodo-card {
-                padding:13px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-            }
-
-
-            .way-msg-periodo-title {
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-msg-periodo-card textarea {
-                min-height:340px!important;
-
-                margin-top:8px!important;
-            }
-
-
-            .way-msg-special-info {
-                padding:14px!important;
-
-                border:
-                    1px solid
-                    rgba(168,85,247,.30)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    rgba(168,85,247,.07)!important;
-
-                color:#a855f7!important;
-
-                font-size:12px!important;
-                line-height:1.6!important;
-            }
-
-
-            .way-msg-visita-info {
-                color:#d97706!important;
-
-                border-color:
-                    rgba(245,158,11,.35)!important;
-
-                background:
-                    rgba(245,158,11,.08)!important;
-            }
-
-
-            .way-msg-current-period {
-                align-self:flex-start!important;
-
-                padding:
-                    6px 10px!important;
-
-                border:
-                    1px solid
-                    rgba(16,185,129,.25)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    rgba(16,185,129,.08)!important;
-
-                color:#059669!important;
-
-                font-size:11px!important;
-                font-weight:600!important;
-            }
-
-
-            /* =================================================
-               AÇÕES
-               ================================================= */
-
-            .way-msg-actions {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:flex-end!important;
-
-                gap:9px!important;
-
-                margin-top:auto!important;
-
-                padding-top:12px!important;
-            }
-
-
-            .way-msg-actions button {
-                min-height:36px!important;
-
-                padding:
-                    6px 14px!important;
-
-                border-radius:7px!important;
-
-                cursor:pointer!important;
-
-                font-size:12px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-msg-delete {
-                margin-right:auto!important;
-
-                border:
-                    1px solid
-                    rgba(244,63,94,.4)!important;
-
-                background:
-                    rgba(244,63,94,.07)!important;
-
-                color:#e11d48!important;
-            }
-
-
-            .way-msg-cancel {
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                color:
-                    var(--way-text)!important;
-            }
-
-
-            .way-msg-save,
-            .way-special-insert {
-                border:
-                    1px solid
-                    var(--way-blue)!important;
-
-                background:
-                    var(--way-blue-bg)!important;
-
-                color:#fff!important;
-            }
-
-
-            .way-msg-status {
-                min-height:18px!important;
-                font-size:11px!important;
-            }
-
-
-            .way-msg-status.error {
-                color:#ef4444!important;
-            }
-
-
-            .way-msg-status.success {
-                color:#10b981!important;
-            }
-
-
-            /* =================================================
-               AUTOCOMPLETE
-               ================================================= */
-
-            #way-msg-autocomplete {
-                position:fixed!important;
-
-                z-index:2147483645!important;
-
-                display:flex!important;
-                flex-direction:column!important;
-
-                max-height:
-                    ${CONFIG.autocomplete.alturaMaxima}px!important;
-
-                overflow-y:auto!important;
-                overflow-x:hidden!important;
-
-                padding:6px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:10px!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                box-shadow:
-                    0 14px 38px
-                    var(--way-shadow)!important;
-
-                font-family:
-                    inherit!important;
-            }
-
-
-            .way-ac-header {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:space-between!important;
-
-                gap:12px!important;
-
-                padding:
-                    7px 9px 10px!important;
-
-                border-bottom:
-                    1px solid
-                    var(--way-border-soft)!important;
-            }
-
-
-            .way-ac-header-left {
-                display:flex!important;
-                align-items:center!important;
-
-                min-width:0!important;
-
-                gap:9px!important;
-            }
-
-
-            .way-ac-title-wrap {
-                min-width:0!important;
-            }
-
-
-            .way-ac-title {
-                display:block!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:11px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-ac-subtitle {
-                display:block!important;
-
-                margin-top:2px!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-ac-count {
-                flex-shrink:0!important;
-
-                padding:
-                    2px 7px!important;
-
-                border-radius:999px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-ac-back {
-                min-height:28px!important;
-
-                padding:
-                    3px 9px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:6px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                cursor:pointer!important;
-
-                font-size:9px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-ac-categories,
-            .way-ac-items {
-                display:flex!important;
-                flex-direction:column!important;
-
-                gap:4px!important;
-
-                padding-top:5px!important;
-            }
-
-
-            .way-ac-category-item {
-                width:100%!important;
-
-                display:grid!important;
-
-                grid-template-columns:
-                    minmax(0,1fr)
-                    auto!important;
-
-                align-items:center!important;
-
-                gap:14px!important;
-
-                padding:
-                    10px 12px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                border:
-                    1px solid
-                    transparent!important;
-
-                border-radius:8px!important;
-
-                background:
-                    transparent!important;
-
-                color:
-                    inherit!important;
-
-                cursor:pointer!important;
-
-                text-align:left!important;
-                font-family:inherit!important;
-            }
-
-
-            .way-ac-category-item:hover,
-            .way-ac-category-item.active,
-            .way-ac-item:hover,
-            .way-ac-item.active {
-                background:
-                    var(--way-hover)!important;
-
-                border-color:
-                    rgba(59,130,246,.45)!important;
-            }
-
-
-            .way-ac-category-main {
-                min-width:0!important;
-            }
-
-
-            .way-ac-category-name {
-                display:block!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:11px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-ac-category-preview {
-                display:block!important;
-
-                margin-top:3px!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-family:
-                    Consolas,
-                    Monaco,
-                    monospace!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-ac-category-side {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:8px!important;
-            }
-
-
-            .way-ac-category-count {
-                padding:
-                    2px 7px!important;
-
-                border-radius:999px!important;
-
-                background:
-                    rgba(59,130,246,.10)!important;
-
-                color:#3b82f6!important;
-
-                font-size:9px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-ac-category-arrow {
-                color:
-                    var(--way-text-muted)!important;
-
-                font-size:16px!important;
-            }
-
-
-            .way-ac-item {
-                width:100%!important;
-
-                display:grid!important;
-
-                grid-template-columns:
-                    minmax(120px,175px)
-                    minmax(0,1fr)
-                    auto!important;
-
-                align-items:center!important;
-
-                gap:14px!important;
-
-                padding:
-                    9px 11px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                border:
-                    1px solid
-                    transparent!important;
-
-                border-radius:8px!important;
-
-                background:
-                    transparent!important;
-
-                color:
-                    inherit!important;
-
-                cursor:pointer!important;
-
-                text-align:left!important;
-                font-family:inherit!important;
-            }
-
-
-            .way-ac-command {
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-blue)!important;
-
-                font-family:
-                    Consolas,
-                    Monaco,
-                    monospace!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-ac-command-content {
-                min-width:0!important;
-            }
-
-
-            .way-ac-preview {
-                display:block!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text)!important;
-
-                font-size:11px!important;
-            }
-
-
-            .way-ac-command-category {
-                display:block!important;
-
-                margin-top:3px!important;
-
-                overflow:hidden!important;
-                text-overflow:ellipsis!important;
-                white-space:nowrap!important;
-
-                color:
-                    var(--way-text-muted)!important;
-
-                font-size:8px!important;
-            }
-
-
-            .way-ac-type {
-                flex-shrink:0!important;
-
-                padding:
-                    2px 7px!important;
-
-                border-radius:999px!important;
-
-                background:
-                    rgba(14,165,233,.10)!important;
-
-                color:#0284c7!important;
-
-                font-size:9px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-ac-type.agenda {
-                color:#a855f7!important;
-
-                background:
-                    rgba(168,85,247,.10)!important;
-            }
-
-
-            .way-ac-type.visita {
-                color:#d97706!important;
-
-                background:
-                    rgba(245,158,11,.10)!important;
-            }
-
-
-            .way-ac-footer {
-                display:flex!important;
-                align-items:center!important;
-                flex-wrap:wrap!important;
-
-                gap:10px!important;
-
-                padding:
-                    8px 8px 3px!important;
-
-                margin-top:4px!important;
-
-                border-top:
-                    1px solid
-                    var(--way-border-soft)!important;
-
-                color:
-                    var(--way-text-muted)!important;
-
-                font-size:9px!important;
-            }
-
-
-            .way-ac-key {
-                display:inline-flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-
-                min-width:18px!important;
-                height:17px!important;
-
-                padding:
-                    0 4px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:4px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:9px!important;
-            }
-
-
-            /* =================================================
-               MODAIS ESPECIAIS
-               ================================================= */
-
-            .way-special-overlay {
-                position:fixed!important;
-                inset:0!important;
-
-                z-index:2147483647!important;
-
-                display:flex!important;
-                align-items:center!important;
-                justify-content:center!important;
-
-                padding:20px!important;
-
-                background:
-                    var(--way-overlay)!important;
-
-                backdrop-filter:
-                    blur(3px)!important;
-
-                color-scheme:
-                    var(--way-color-scheme)!important;
-            }
-
-
-            .way-special-modal {
-                width:
-                    min(
-                        760px,
-                        calc(100vw - 30px)
-                    )!important;
-
-                max-height:
-                    calc(100vh - 40px)!important;
-
-                display:flex!important;
-                flex-direction:column!important;
-
-                overflow:hidden!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:12px!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                box-shadow:
-                    0 20px 65px
-                    var(--way-shadow)!important;
-            }
-
-
-            .way-visita-modal {
-                width:
-                    min(
-                        940px,
-                        calc(100vw - 30px)
-                    )!important;
-            }
-
-
-            .way-special-header {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:space-between!important;
-
-                padding:
-                    14px 16px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                border-bottom:
-                    1px solid
-                    var(--way-border)!important;
-            }
-
-
-            .way-special-title {
-                margin:0!important;
-
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:16px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-special-subtitle {
-                margin-top:2px!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:10px!important;
-            }
-
-
-            .way-special-close {
-                width:32px!important;
-                height:32px!important;
-
-                border:0!important;
-                border-radius:6px!important;
-
-                background:
-                    transparent!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                cursor:pointer!important;
-
-                font-size:22px!important;
-            }
-
-
-            .way-special-body {
-                padding:16px!important;
-
-                overflow-y:auto!important;
-            }
-
-
-            .way-special-footer {
-                display:flex!important;
-                align-items:center!important;
-                justify-content:flex-end!important;
-
-                gap:8px!important;
-
-                padding:
-                    12px 16px!important;
-
-                border-top:
-                    1px solid
-                    var(--way-border)!important;
-
-                background:
-                    var(--way-panel-2)!important;
-            }
-
-
-            .way-special-footer button {
-                min-height:35px!important;
-
-                padding:
-                    6px 13px!important;
-
-                border-radius:7px!important;
-
-                cursor:pointer!important;
-
-                font-size:12px!important;
-                font-weight:600!important;
-            }
-
-
-            .way-special-cancel {
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                background:
-                    var(--way-panel)!important;
-
-                color:
-                    var(--way-text)!important;
-            }
-
-
-            .way-agenda-field {
-                display:flex!important;
-                flex-direction:column!important;
-
-                gap:6px!important;
-
-                margin-bottom:14px!important;
-            }
-
-
-            .way-agenda-field label {
-                color:
-                    var(--way-text)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-agenda-field input[type="date"] {
-                width:100%!important;
-
-                min-height:40px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                padding:
-                    8px 10px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-input)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                color-scheme:
-                    var(--way-color-scheme)!important;
-            }
-
-
-            .way-agenda-periods {
-                display:grid!important;
-
-                grid-template-columns:
-                    repeat(
-                        3,
-                        minmax(0,1fr)
-                    )!important;
-
-                gap:10px!important;
-            }
-
-
-            .way-agenda-period {
-                display:flex!important;
-                align-items:center!important;
-
-                gap:8px!important;
-
-                padding:12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    var(--way-panel-2)!important;
-
-                cursor:pointer!important;
-            }
-
-
-            .way-agenda-period:hover,
-            .way-agenda-period:has(input:checked) {
-                border-color:
-                    var(--way-blue)!important;
-            }
-
-
-            .way-agenda-period:has(input:checked) {
-                background:
-                    var(--way-hover)!important;
-            }
-
-
-            .way-agenda-period-text {
-                display:flex!important;
-                flex-direction:column!important;
-            }
-
-
-            .way-agenda-period-name {
-                color:
-                    var(--way-text-strong)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-agenda-period-hours {
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:10px!important;
-            }
-
-
-            .way-special-preview-label {
-                margin-top:15px!important;
-                margin-bottom:6px!important;
-
-                color:
-                    var(--way-text)!important;
-
-                font-size:12px!important;
-                font-weight:700!important;
-            }
-
-
-            .way-special-preview {
-                width:100%!important;
-
-                min-height:190px!important;
-
-                box-sizing:
-                    border-box!important;
-
-                padding:11px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                background:
-                    var(--way-input)!important;
-
-                color:
-                    var(--way-text)!important;
-
-                font-family:
-                    inherit!important;
-
-                font-size:12px!important;
-                line-height:1.5!important;
-
-                resize:vertical!important;
-            }
-
-
-            .way-special-status {
-                min-height:18px!important;
-
-                margin-top:7px!important;
-
-                color:#ef4444!important;
-
-                font-size:11px!important;
-            }
-
-
-            .way-visita-layout {
-                display:grid!important;
-
-                grid-template-columns:
-                    minmax(300px,390px)
-                    minmax(0,1fr)!important;
-
-                gap:18px!important;
-            }
-
-
-            .way-visita-fields {
-                display:flex!important;
-                flex-direction:column!important;
-
-                gap:11px!important;
-            }
-
-
-            .way-visita-field textarea {
-                min-height:70px!important;
-
-                resize:vertical!important;
-            }
-
-
-            .way-visita-field-tag {
-                margin-left:5px!important;
-
-                color:
-                    var(--way-text-muted)!important;
-
-                font-family:
-                    Consolas,
-                    Monaco,
-                    monospace!important;
-
-                font-size:9px!important;
-                font-weight:400!important;
-            }
-
-
-            .way-visita-field-auto {
-                display:inline-flex!important;
-
-                margin-left:5px!important;
-
-                padding:
-                    1px 5px!important;
-
-                border-radius:999px!important;
-
-                background:
-                    rgba(16,185,129,.10)!important;
-
-                color:#059669!important;
-
-                font-size:8px!important;
-            }
-
-
-            .way-visita-preview {
-                min-height:520px!important;
-            }
-
-
-            .way-visita-empty {
-                padding:15px!important;
-
-                border:
-                    1px dashed
-                    var(--way-border)!important;
-
-                border-radius:8px!important;
-
-                color:
-                    var(--way-text-soft)!important;
-
-                font-size:11px!important;
-
-                text-align:center!important;
-            }
-
-
-            .way-import-modal {
-                width:
-                    min(
-                        560px,
-                        calc(100vw - 30px)
-                    )!important;
-            }
-
-
-            .way-import-body {
-                padding:17px!important;
-
-                color:
-                    var(--way-text)!important;
-
-                font-size:12px!important;
-                line-height:1.6!important;
-            }
-
-
-            .way-import-summary {
-                margin:
-                    12px 0!important;
-
-                padding:
-                    10px 12px!important;
-
-                border:
-                    1px solid
-                    var(--way-border)!important;
-
-                border-radius:7px!important;
-
-                background:
-                    var(--way-input)!important;
-            }
-
-
-            .way-import-warning {
-                color:#d97706!important;
-            }
-
-
-            @media(max-width:900px) {
-
-                .way-msg-body {
-                    grid-template-columns:
-                        1fr!important;
-
-                    grid-template-rows:
-                        260px
-                        minmax(0,1fr)!important;
-                }
-
-
-                .way-msg-periodos,
-                .way-agenda-periods,
-                .way-visita-layout,
-                .way-msg-global-tags-grid,
-                .way-alert-levels,
-                .way-alert-preview {
-                    grid-template-columns:
-                        1fr!important;
-                }
-
-
-                .way-ac-item {
-                    grid-template-columns:
-                        minmax(90px,120px)
-                        minmax(0,1fr)
-                        auto!important;
-                }
-            }
-
-        `;
-
-
-        document.documentElement.appendChild(
-            style
+        document.documentElement?.style.setProperty(
+            '--way-autocomplete-max-height',
+            `${CONFIG.autocomplete.alturaMaxima}px`
         );
     }
 
@@ -9741,6 +8108,15 @@ A previsão para realização do atendimento é dentro do período informado, n�
         }
 
 
+        if (
+            origem.tipo ===
+            'imagem'
+        ) {
+            tipo =
+                'imagem';
+        }
+
+
         let categoria =
             String(
                 origem.categoria ??
@@ -9773,6 +8149,16 @@ A previsão para realização do atendimento é dentro do período informado, n�
             comando,
             categoria,
             tipo,
+
+            sinonimos:
+                MESSAGE_CATALOG_MANAGER?.normalizeStringList?.(
+                    origem.sinonimos
+                ) || [],
+
+            palavrasChave:
+                MESSAGE_CATALOG_MANAGER?.normalizeStringList?.(
+                    origem.palavrasChave
+                ) || [],
 
             variacaoHorario:
                 tipo ===
@@ -9809,6 +8195,11 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 String(
                     origem.templateVisita ??
                     ''
+                ),
+
+            arquivoImagem:
+                normalizarCaminhoImagemMensagem(
+                    origem.arquivoImagem
                 )
         };
     }
@@ -10174,7 +8565,8 @@ A previsão para realização do atendimento é dentro do período informado, n�
             salvarMensagens(
                 Array.from(
                     mapa.values()
-                )
+                ),
+                'Importação mesclada de mensagens'
             );
 
 
@@ -10210,7 +8602,8 @@ A previsão para realização do atendimento é dentro do período informado, n�
     ) {
         const sucesso =
             salvarMensagens(
-                importadas
+                importadas,
+                'Substituição do catálogo por backup'
             );
 
 
@@ -10774,6 +9167,64 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 </label>
 
 
+                <label class="way-alert-toggle">
+
+                    <input
+                        type="checkbox"
+                        name="alertaVisualSomenteUltimaMensagemAgente"
+                        ${
+                            configuracao.alertaVisualSomenteUltimaMensagemAgente
+                                ?
+                                'checked'
+                                :
+                                ''
+                        }
+                    >
+
+                    <span>
+
+                        <span class="way-alert-toggle-title">
+                            Alertas visuais somente após mensagem do agente
+                        </span>
+
+                        <span class="way-alert-toggle-description">
+                            Desativado por padrão: os cards continuam coloridos após mensagens do cliente ou do agente.
+                        </span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="way-alert-toggle">
+
+                    <input
+                        type="checkbox"
+                        name="somenteUltimaMensagemAgente"
+                        ${
+                            configuracao.somenteUltimaMensagemAgente
+                                ?
+                                'checked'
+                                :
+                                ''
+                        }
+                    >
+
+                    <span>
+
+                        <span class="way-alert-toggle-title">
+                            Notificar somente após mensagem do agente
+                        </span>
+
+                        <span class="way-alert-toggle-description">
+                            Se a última mensagem for do cliente, os alertas de inatividade não serão enviados ao Chrome.
+                        </span>
+
+                    </span>
+
+                </label>
+
+
                 <div class="way-alert-levels">
 
                     <div class="way-alert-level yellow">
@@ -11127,6 +9578,20 @@ A previsão para realização do atendimento é dentro do período informado, n�
                             .notificarVermelho;
 
 
+                    form.querySelector(
+                        '[name="somenteUltimaMensagemAgente"]'
+                    ).checked =
+                        ALERTAS_INATIVIDADE_PADRAO
+                            .somenteUltimaMensagemAgente;
+
+
+                    form.querySelector(
+                        '[name="alertaVisualSomenteUltimaMensagemAgente"]'
+                    ).checked =
+                        ALERTAS_INATIVIDADE_PADRAO
+                            .alertaVisualSomenteUltimaMensagemAgente;
+
+
                     status.className =
                         'way-alert-status';
 
@@ -11183,6 +9648,16 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     notificarVermelho:
                         form.querySelector(
                             '[name="notificarVermelho"]'
+                        ).checked,
+
+                    somenteUltimaMensagemAgente:
+                        form.querySelector(
+                            '[name="somenteUltimaMensagemAgente"]'
+                        ).checked,
+
+                    alertaVisualSomenteUltimaMensagemAgente:
+                        form.querySelector(
+                            '[name="alertaVisualSomenteUltimaMensagemAgente"]'
                         ).checked
                 };
 
@@ -11739,7 +10214,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
                         </h2>
 
                         <div class="way-msg-subtitle">
-                            Catálogo compartilhado com o Matrix: alterações feitas aqui ficam disponíveis nos dois sistemas.
+                            <strong>Perfil ativo: ${escaparHTML(obterNomePerfilAtivo())}</strong> · Catálogo compartilhado com o Matrix.
                         </div>
 
                         <div class="way-msg-backup-status"></div>
@@ -11749,6 +10224,20 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     <div class="way-msg-header-actions">
 
                         <div class="way-msg-header-backup">
+
+                            <button
+                                type="button"
+                                class="way-msg-backup-button way-msg-undo"
+                            >
+                                ↶ Desfazer
+                            </button>
+
+                            <button
+                                type="button"
+                                class="way-msg-backup-button way-msg-order-categories"
+                            >
+                                ⇅ Categorias
+                            </button>
 
                             <button
                                 type="button"
@@ -11863,7 +10352,128 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 selecionarArquivoImportacao;
 
 
+        overlay
+            .querySelector(
+                '.way-msg-undo'
+            )
+            .onclick =
+                function () {
+                    const registro =
+                        MESSAGE_CATALOG_MANAGER?.consumeUndoWithStorage?.(
+                            storage,
+                            setorMensagensAtivo
+                        );
+
+                    if (!registro) {
+                        window.alert(
+                            'Não há alterações recentes para desfazer.'
+                        );
+                        return;
+                    }
+
+                    salvarMensagens(
+                        registro.messages,
+                        `Desfazer: ${registro.action}`,
+                        false
+                    );
+
+                    mensagemEmEdicaoId = null;
+                    renderizarLista();
+                    renderizarPlaceholderConfiguracaoMensagens();
+                };
+
+
+        overlay
+            .querySelector(
+                '.way-msg-order-categories'
+            )
+            .onclick =
+                abrirOrganizadorCategorias;
+
+
         renderizarLista();
+    }
+
+
+    function abrirOrganizadorCategorias() {
+        document.getElementById(
+            'way-category-order-root'
+        )?.remove();
+
+        const raiz =
+            document.createElement(
+                'div'
+            );
+
+        raiz.id =
+            'way-category-order-root';
+
+        raiz.className =
+            'way-special-overlay';
+
+        function renderizar() {
+            const categorias =
+                Object.entries(CATEGORIAS).map(
+                    ([id, categoria], ordem) => ({
+                        id,
+                        label: categoria.label,
+                        ordem
+                    })
+                );
+
+            const ordenadas =
+                MESSAGE_CATALOG_MANAGER?.sortCategories?.(
+                    categorias,
+                    obterExperienciaMensagens()
+                ) || categorias;
+
+            raiz.innerHTML = `
+                <div class="way-special-modal way-category-order-modal">
+                    <div class="way-special-header">
+                        <div>
+                            <h3 class="way-special-title">⇅ Ordenar categorias</h3>
+                            <div class="way-special-subtitle">A ordem é compartilhada com o Matrix.</div>
+                        </div>
+                        <button type="button" class="way-special-close">×</button>
+                    </div>
+                    <div class="way-special-body way-category-order-list">
+                        ${ordenadas.map(categoria => `
+                            <div data-category-id="${escaparHTML(categoria.id)}">
+                                <span>${escaparHTML(categoria.label)}</span>
+                                <button type="button" data-direction="-1">↑</button>
+                                <button type="button" data-direction="1">↓</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="way-special-footer">
+                        <button type="button" class="way-special-insert">Concluir</button>
+                    </div>
+                </div>
+            `;
+
+            const fechar = () => {
+                raiz.remove();
+                renderizarLista();
+            };
+
+            raiz.querySelector('.way-special-close')?.addEventListener('click', fechar);
+            raiz.querySelector('.way-special-insert')?.addEventListener('click', fechar);
+            raiz.querySelectorAll('[data-category-id] button').forEach(botao => {
+                botao.addEventListener('click', () => {
+                    MESSAGE_CATALOG_MANAGER?.moveCategoryWithStorage?.(
+                        storage,
+                        setorMensagensAtivo,
+                        botao.closest('[data-category-id]').dataset.categoryId,
+                        Number(botao.dataset.direction),
+                        ordenadas.map(categoria => categoria.id)
+                    );
+                    renderizar();
+                });
+            });
+        }
+
+        renderizar();
+        document.body.appendChild(raiz);
     }
 
 
@@ -11929,22 +10539,19 @@ A previsão para realização do atendimento é dentro do período informado, n�
         }
 
 
-        mensagens
-            .slice()
-            .sort(
-                (
-                    a,
-                    b
-                ) =>
-                    String(
-                        a.comando
-                    )
-                        .localeCompare(
-                            String(
-                                b.comando
-                            )
-                        )
-            )
+        const mensagensOrdenadas =
+            obterCategoriasAutocomplete()
+                .filter(categoria => ![
+                    CATEGORIA_FAVORITOS,
+                    CATEGORIA_RECENTES
+                ].includes(categoria.id))
+                .flatMap(categoria => categoria.comandos)
+                .filter((mensagem, indice, todas) =>
+                    todas.findIndex(item => item.id === mensagem.id) === indice
+                );
+
+
+        mensagensOrdenadas
             .forEach(
                 mensagem => {
                     const item =
@@ -12015,6 +10622,22 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                     if (
                         tipo ===
+                        'imagem'
+                    ) {
+                        descricao =
+                            'Anexar imagem ao atendimento';
+
+
+                        badge = `
+                            <span class="way-msg-badge">
+                                Imagem
+                            </span>
+                        `;
+                    }
+
+
+                    if (
+                        tipo ===
                             'texto' &&
                         mensagem.variacaoHorario
                     ) {
@@ -12056,6 +10679,11 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                         </div>
 
+                        <span class="way-msg-list-order">
+                            <button type="button" data-direction="-1" title="Mover para cima">↑</button>
+                            <button type="button" data-direction="1" title="Mover para baixo">↓</button>
+                        </span>
+
                         ${badge}
 
                     `;
@@ -12064,7 +10692,32 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     item.addEventListener(
                         'click',
 
-                        function () {
+                        function (event) {
+                            const botaoOrdem =
+                                event?.target?.closest?.('[data-direction]');
+
+                            if (botaoOrdem) {
+                                event.preventDefault();
+                                event.stopPropagation();
+
+                                const mensagensCategoria =
+                                    mensagens.filter(item =>
+                                        mensagemPertenceCategoria(item, mensagem.categoria)
+                                    );
+
+                                MESSAGE_CATALOG_MANAGER?.moveMessageWithStorage?.(
+                                    storage,
+                                    setorMensagensAtivo,
+                                    mensagem.categoria,
+                                    mensagem.id,
+                                    Number(botaoOrdem.dataset.direction),
+                                    mensagensCategoria.map(item => item.id)
+                                );
+
+                                renderizarLista();
+                                return;
+                            }
+
                             mensagemEmEdicaoId =
                                 mensagem.id;
 
@@ -12153,7 +10806,8 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 manha: '',
                 tarde: '',
                 noite: '',
-                templateVisita: ''
+                templateVisita: '',
+                arquivoImagem: ''
             };
 
 
@@ -12230,6 +10884,39 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                 </div>
 
+                <div class="way-msg-grid-two">
+                    <div class="way-msg-field">
+                        <label>Sinônimos</label>
+                        <input
+                            type="text"
+                            name="sinonimos"
+                            placeholder="Ex.: boleto, 2via"
+                            value="${escaparHTML((dados.sinonimos || []).join(', '))}"
+                        >
+                    </div>
+                    <div class="way-msg-field">
+                        <label>Palavras relacionadas</label>
+                        <input
+                            type="text"
+                            name="palavrasChave"
+                            placeholder="Ex.: fatura, vencimento"
+                            value="${escaparHTML((dados.palavrasChave || []).join(', '))}"
+                        >
+                    </div>
+                </div>
+
+                <label class="way-msg-check way-msg-favorite-check">
+                    <input
+                        type="checkbox"
+                        name="favorita"
+                        ${obterExperienciaMensagens().favorites.includes(dados.id) ? 'checked' : ''}
+                    >
+                    <span class="way-msg-check-text">
+                        <span class="way-msg-check-title">⭐ Mostrar em Favoritos</span>
+                        <span class="way-msg-check-description">Aparece primeiro ao digitar ! no ChatWoot e no Matrix.</span>
+                    </span>
+                </label>
+
                 <div class="way-msg-field">
 
                     <label>
@@ -12280,6 +10967,20 @@ A previsão para realização do atendimento é dentro do período informado, n�
                             Visita Técnica
                         </option>
 
+                        <option
+                            value="imagem"
+                            ${
+                                tipoInicial ===
+                                'imagem'
+                                    ?
+                                    'selected'
+                                    :
+                                    ''
+                            }
+                        >
+                            Imagem da extensão
+                        </option>
+
                     </select>
 
                 </div>
@@ -12297,6 +10998,11 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 </div>
 
                 <div class="way-msg-texto-options">
+
+                    <div class="way-msg-gender-syntax-info">
+                        <strong>♂ / ♀ Variação por gênero</strong>
+                        <span>Use <code>{{genero:ajudá-lo|ajudá-la}}</code> para abrir o seletor antes da inserção.</span>
+                    </div>
 
                     <label class="way-msg-check">
 
@@ -12482,12 +11188,55 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                 </div>
 
+                <div
+                    class="way-msg-imagem-options"
+                    style="display:none;"
+                >
+
+                    <div class="way-msg-special-info">
+
+                        <strong>
+                            🖼 Imagem da extensão
+                        </strong>
+
+                        <br><br>
+
+                        A imagem será anexada ao compositor para conferência,
+                        sem envio automático ao cliente.
+
+                    </div>
+
+                    <div class="way-msg-field">
+
+                        <label>
+                            Caminho do arquivo PNG
+                        </label>
+
+                        <input
+                            type="text"
+                            name="arquivoImagem"
+                            placeholder="assets/mensagens/enviarimagem.png"
+                            value="${escaparHTML(
+                                dados.arquivoImagem ||
+                                ''
+                            )}"
+                        >
+
+                    </div>
+
+                </div>
+
+                <div class="way-msg-live-preview">
+                    <span class="way-msg-tags-title">👁 Pré-visualização</span>
+                    <div data-way-message-live-preview></div>
+                </div>
+
                 <div class="way-msg-status"></div>
 
                 <div class="way-msg-actions">
 
                     ${
-                        mensagem
+                        mensagem?.id
                             ?
                             `
                                 <button
@@ -12495,6 +11244,13 @@ A previsão para realização do atendimento é dentro do período informado, n�
                                     class="way-msg-delete"
                                 >
                                     🗑 Excluir
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="way-msg-duplicate"
+                                >
+                                    ⧉ Duplicar
                                 </button>
                             `
                             :
@@ -12555,6 +11311,12 @@ A previsão para realização do atendimento é dentro do período informado, n�
         const visitaOptions =
             form.querySelector(
                 '.way-msg-visita-options'
+            );
+
+
+        const imagemOptions =
+            form.querySelector(
+                '.way-msg-imagem-options'
             );
 
 
@@ -12637,6 +11399,15 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     'none';
 
 
+            imagemOptions.style.display =
+                valor ===
+                    'imagem'
+                    ?
+                    'block'
+                    :
+                    'none';
+
+
             if (
                 valor ===
                 'texto'
@@ -12670,6 +11441,50 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                 atualizarTagsDetectadas();
             }
+
+
+            atualizarPreviewFormulario();
+        }
+
+
+        function atualizarPreviewFormulario() {
+            const preview =
+                form.querySelector(
+                    '[data-way-message-live-preview]'
+                );
+
+            if (!preview) {
+                return;
+            }
+
+            let texto = '';
+
+            if (tipo.value === 'disponibilidade') {
+                texto = 'A agenda de disponibilidade será aberta.';
+            } else if (tipo.value === 'visita') {
+                texto = textareaVisita.value || TEMPLATE_VISITA_PADRAO;
+            } else if (tipo.value === 'imagem') {
+                texto = `A imagem ${form.querySelector('[name="arquivoImagem"]')?.value || 'PNG configurada'} será anexada ao atendimento.`;
+            } else if (checkHorario.checked) {
+                texto = form.querySelector(`[name="${obterPeriodoAtual()}"]`)?.value || '';
+            } else {
+                texto = form.querySelector('[name="mensagem"]')?.value || '';
+            }
+
+            const tagsPendentes =
+                MESSAGE_CATALOG_MANAGER?.unresolvedTags?.(
+                    texto,
+                    obterDadosGlobaisSistema()
+                ) || [];
+
+            preview.innerHTML = `
+                ${tagsPendentes.length ? `
+                    <div class="way-msg-tag-warning">
+                        ⚠ Tags pendentes: ${escaparHTML(tagsPendentes.map(tag => `{{${tag}}}`).join(', '))}
+                    </div>
+                ` : ''}
+                <div class="way-msg-live-preview-text">${escaparHTML(aplicarTagsGlobais(texto) || 'A prévia aparecerá aqui.')}</div>
+            `;
         }
 
 
@@ -12687,7 +11502,22 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
         textareaVisita.addEventListener(
             'input',
-            atualizarTagsDetectadas
+            function () {
+                atualizarTagsDetectadas();
+                atualizarPreviewFormulario();
+            }
+        );
+
+
+        form.addEventListener(
+            'input',
+            atualizarPreviewFormulario
+        );
+
+
+        form.addEventListener(
+            'change',
+            atualizarPreviewFormulario
         );
 
 
@@ -12757,6 +11587,8 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
         atualizarTagsDetectadas();
 
+        atualizarPreviewFormulario();
+
 
         form
             .querySelector(
@@ -12800,6 +11632,35 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     excluirMensagem(
                         mensagem.id
                     );
+                }
+            );
+
+
+        form
+            .querySelector(
+                '.way-msg-duplicate'
+            )
+            ?.addEventListener(
+                'click',
+
+                function () {
+                    mensagemEmEdicaoId = null;
+
+                    renderizarLista();
+
+                    renderizarFormulario({
+                        ...JSON.parse(JSON.stringify(mensagem)),
+                        id: '',
+                        comando: `${mensagem.comando}-copia`
+                    });
+
+                    const comandoDuplicado =
+                        document.querySelector(
+                            '#way-msg-personalizadas-modal [name="comando"]'
+                        );
+
+                    comandoDuplicado?.focus();
+                    comandoDuplicado?.select();
                 }
             );
 
@@ -12921,6 +11782,31 @@ A previsão para realização do atendimento é dentro do período informado, n�
                 .trim();
 
 
+        const arquivoImagem =
+            normalizarCaminhoImagemMensagem(
+                form.querySelector(
+                    '[name="arquivoImagem"]'
+                )
+                    ?.value
+            );
+
+
+        const sinonimos =
+            MESSAGE_CATALOG_MANAGER?.normalizeStringList?.(
+                form.querySelector('[name="sinonimos"]')?.value
+            ) || [];
+
+
+        const palavrasChave =
+            MESSAGE_CATALOG_MANAGER?.normalizeStringList?.(
+                form.querySelector('[name="palavrasChave"]')?.value
+            ) || [];
+
+
+        const favorita =
+            form.querySelector('[name="favorita"]')?.checked === true;
+
+
         if (
             !categoria ||
             !CATEGORIAS[
@@ -13006,6 +11892,22 @@ A previsão para realização do atendimento é dentro do período informado, n�
         }
 
 
+        if (
+            tipo ===
+                'imagem' &&
+            !arquivoImagem
+        ) {
+            definirStatus(
+                form,
+                'Informe um arquivo PNG válido dentro de assets/mensagens/.',
+                'error'
+            );
+
+
+            return;
+        }
+
+
         const mensagens =
             carregarMensagens();
 
@@ -13042,6 +11944,8 @@ A previsão para realização do atendimento é dentro do período informado, n�
             comando,
             categoria,
             tipo,
+            sinonimos,
+            palavrasChave,
 
             variacaoHorario:
                 tipo ===
@@ -13093,6 +11997,14 @@ A previsão para realização do atendimento é dentro do período informado, n�
                     ?
                     templateVisita
                     :
+                    '',
+
+            arquivoImagem:
+                tipo ===
+                    'imagem'
+                    ?
+                    arquivoImagem
+                    :
                     ''
         };
 
@@ -13123,7 +12035,10 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
         const sucesso =
             salvarMensagens(
-                mensagens
+                mensagens,
+                indice >= 0
+                    ? `Edição de !${comando}`
+                    : `Criação de !${comando}`
             );
 
 
@@ -13143,6 +12058,26 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
         mensagemEmEdicaoId =
             registro.id;
+
+
+        const estaFavorita =
+            obterExperienciaMensagens()
+                .favorites
+                .includes(
+                    registro.id
+                );
+
+
+        if (
+            favorita !==
+            estaFavorita
+        ) {
+            MESSAGE_CATALOG_MANAGER?.toggleFavoriteWithStorage?.(
+                storage,
+                setorMensagensAtivo,
+                registro.id
+            );
+        }
 
 
         definirStatus(
@@ -13168,13 +12103,22 @@ A previsão para realização do atendimento é dentro do período informado, n�
         }
 
 
+        const mensagens =
+            carregarMensagens();
+
+        const removida =
+            mensagens.find(
+                item => item.id === id
+            );
+
         salvarMensagens(
-            carregarMensagens()
+            mensagens
                 .filter(
                     item =>
                         item.id !==
                         id
-                )
+                ),
+            `Exclusão de !${removida?.comando || id}`
         );
 
 
@@ -13411,6 +12355,278 @@ A previsão para realização do atendimento é dentro do período informado, n�
     }
 
 
+    function normalizarCaminhoImagemMensagem(
+        valor
+    ) {
+        const caminho =
+            String(
+                valor ||
+                ''
+            )
+                .trim()
+                .replace(
+                    /^\/+/,
+                    ''
+                );
+
+
+        return /^assets\/mensagens\/[a-z0-9_-]+\.png$/
+            .test(
+                caminho
+            )
+                ? caminho
+                : '';
+    }
+
+
+    function localizarInputImagemChat(
+        campo
+    ) {
+        const seletores =
+            [
+                'input[type="file"][accept*="image"]',
+                'input[type="file"][accept*="png"]',
+                'input[type="file"]'
+            ];
+
+
+        const containers =
+            [
+                campo.closest?.('form'),
+                campo.closest?.('[class*="composer"]'),
+                campo.closest?.('[class*="reply"]'),
+                campo.closest?.('[class*="message-input"]'),
+                campo.parentElement?.parentElement,
+                document
+            ]
+                .filter(
+                    Boolean
+                );
+
+
+        for (
+            const container
+            of containers
+        ) {
+            for (
+                const seletor
+                of seletores
+            ) {
+                if (
+                    container === document &&
+                    seletor === 'input[type="file"]'
+                ) {
+                    continue;
+                }
+
+
+                const input =
+                    container.querySelector?.(
+                        seletor
+                    );
+
+
+                if (
+                    input instanceof
+                    HTMLInputElement
+                ) {
+                    return input;
+                }
+            }
+        }
+
+
+        return null;
+    }
+
+
+    function despacharImagemComoColagem(
+        campo,
+        arquivo,
+        transferencia
+    ) {
+        campo.focus();
+
+
+        let evento;
+
+
+        try {
+            evento =
+                new ClipboardEvent(
+                    'paste',
+                    {
+                        bubbles: true,
+                        cancelable: true,
+                        composed: true,
+                        clipboardData: transferencia
+                    }
+                );
+
+        } catch (erro) {
+            evento =
+                new Event(
+                    'paste',
+                    {
+                        bubbles: true,
+                        cancelable: true,
+                        composed: true
+                    }
+                );
+        }
+
+
+        if (
+            !evento.clipboardData
+        ) {
+            Object.defineProperty(
+                evento,
+                'clipboardData',
+                {
+                    configurable: true,
+                    value: transferencia
+                }
+            );
+        }
+
+
+        Object.defineProperty(
+            evento,
+            'wayToolsImageFile',
+            {
+                configurable: true,
+                value: arquivo
+            }
+        );
+
+
+        campo.dispatchEvent(
+            evento
+        );
+    }
+
+
+    async function anexarImagemMensagem(
+        campo,
+        mensagem
+    ) {
+        const caminho =
+            normalizarCaminhoImagemMensagem(
+                mensagem?.arquivoImagem
+            );
+
+
+        if (
+            !caminho
+        ) {
+            throw new Error(
+                'O comando não possui um arquivo de imagem válido.'
+            );
+        }
+
+
+        const resposta =
+            await fetch(
+                chrome.runtime.getURL(
+                    caminho
+                )
+            );
+
+
+        if (
+            !resposta.ok
+        ) {
+            throw new Error(
+                `Adicione o arquivo ${caminho} à pasta da extensão.`
+            );
+        }
+
+
+        const blob =
+            await resposta.blob();
+
+
+        const nomeArquivo =
+            caminho.split('/').pop() ||
+            'imagem.png';
+
+
+        const arquivo =
+            new File(
+                [
+                    blob
+                ],
+                nomeArquivo,
+                {
+                    type:
+                        blob.type ||
+                        'image/png',
+                    lastModified:
+                        Date.now()
+                }
+            );
+
+
+        const transferencia =
+            new DataTransfer();
+
+
+        transferencia.items.add(
+            arquivo
+        );
+
+
+        const input =
+            localizarInputImagemChat(
+                campo
+            );
+
+
+        definirTextoCampo(
+            campo,
+            ''
+        );
+
+
+        if (
+            input
+        ) {
+            input.files =
+                transferencia.files;
+
+
+            input.dispatchEvent(
+                new Event(
+                    'input',
+                    {
+                        bubbles: true
+                    }
+                )
+            );
+
+
+            input.dispatchEvent(
+                new Event(
+                    'change',
+                    {
+                        bubbles: true
+                    }
+                )
+            );
+
+
+            return;
+        }
+
+
+        despacharImagemComoColagem(
+            campo,
+            arquivo,
+            transferencia
+        );
+    }
+
+
     /* =========================================================
        AUTOCOMPLETE
        ========================================================= */
@@ -13442,16 +12658,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         if (
-            /\s/.test(
-                consulta
-            )
-        ) {
-            return null;
-        }
-
-
-        if (
-            !/^[a-z0-9_-]*$/i
+            consulta.length >
+                80 ||
+            !/^[\p{L}\p{N}_ -]*$/u
                 .test(
                     consulta
                 )
@@ -13468,6 +12677,18 @@ A previsão para realização do atendimento é dentro do período informado, n�
     function obterMensagensBuscaGlobal(
         consulta
     ) {
+        if (
+            MESSAGE_CATALOG_MANAGER?.searchMessages
+        ) {
+            return MESSAGE_CATALOG_MANAGER.searchMessages(
+                carregarMensagens(),
+                consulta,
+                CATEGORIAS,
+                obterExperienciaMensagens(),
+                CONFIG.autocomplete.maxResultadosBusca
+            );
+        }
+
         return carregarMensagens()
             .filter(
                 mensagem =>
@@ -13526,6 +12747,16 @@ A previsão para realização do atendimento é dentro do período informado, n�
         ) {
             return (
                 '🛠 Preencher dados da visita técnica'
+            );
+        }
+
+
+        if (
+            tipo ===
+            'imagem'
+        ) {
+            return (
+                '🖼 Anexar imagem ao atendimento'
             );
         }
 
@@ -13722,110 +12953,89 @@ A previsão para realização do atendimento é dentro do período informado, n�
         }
 
 
-        const rect =
-            campo.getBoundingClientRect();
-
-
-        const margem =
-            12;
-
-
-        const largura =
-            Math.min(
-                Math.max(
-                    rect.width,
-                    CONFIG.autocomplete
-                        .larguraMinima,
-                    window.innerWidth *
-                    CONFIG.autocomplete
-                        .percentualTela
-                ),
-
-                CONFIG.autocomplete
-                    .larguraMaxima,
-
-                window.innerWidth -
-                margem *
-                2
-            );
-
-
-        let esquerda =
-            rect.left +
-            (
-                rect.width -
-                largura
-            ) /
-            2;
-
-
-        esquerda =
+        const rect = campo.getBoundingClientRect();
+        const viewport = window.visualViewport;
+        const viewportLeft = viewport?.offsetLeft || 0;
+        const viewportTop = viewport?.offsetTop || 0;
+        const viewportWidth = viewport?.width || window.innerWidth;
+        const viewportHeight = viewport?.height || window.innerHeight;
+        const viewportRight = viewportLeft + viewportWidth;
+        const viewportBottom = viewportTop + viewportHeight;
+        const margem = 12;
+        const espacamento = 6;
+        const larguraDisponivel = Math.max(
+            1,
+            viewportWidth - margem * 2
+        );
+        const largura = Math.min(
             Math.max(
-                margem,
-                esquerda
-            );
+                rect.width,
+                CONFIG.autocomplete.larguraMinima,
+                viewportWidth * CONFIG.autocomplete.percentualTela
+            ),
+            CONFIG.autocomplete.larguraMaxima,
+            larguraDisponivel
+        );
+        const esquerdaIdeal = rect.left + (rect.width - largura) / 2;
+        const esquerda = Math.min(
+            Math.max(esquerdaIdeal, viewportLeft + margem),
+            viewportRight - margem - largura
+        );
 
+        popup.style.width = `${Math.round(largura)}px`;
+        popup.style.left = `${Math.round(esquerda)}px`;
+        popup.style.right = 'auto';
 
-        if (
-            esquerda +
-            largura >
-            window.innerWidth -
-            margem
-        ) {
-            esquerda =
-                window.innerWidth -
-                largura -
-                margem;
-        }
+        popup.style.setProperty(
+            '--way-autocomplete-max-height',
+            `${CONFIG.autocomplete.alturaMaxima}px`
+        );
 
+        const alturaNatural = Math.min(
+            Math.max(popup.scrollHeight, popup.offsetHeight),
+            CONFIG.autocomplete.alturaMaxima
+        );
+        const espacoAcima = Math.max(
+            0,
+            rect.top - viewportTop - margem - espacamento
+        );
+        const espacoAbaixo = Math.max(
+            0,
+            viewportBottom - rect.bottom - margem - espacamento
+        );
+        const abrirAcima =
+            espacoAcima >= alturaNatural ||
+            espacoAcima > espacoAbaixo;
+        const espacoEscolhido = abrirAcima
+            ? espacoAcima
+            : espacoAbaixo;
+        const alturaMaximaTela = Math.max(
+            48,
+            viewportHeight - margem * 2
+        );
+        const alturaMinimaUtil = Math.min(
+            96,
+            alturaMaximaTela
+        );
+        const altura = Math.min(
+            alturaNatural,
+            alturaMaximaTela,
+            Math.max(alturaMinimaUtil, espacoEscolhido)
+        );
+        const topoIdeal = abrirAcima
+            ? rect.top - espacamento - altura
+            : rect.bottom + espacamento;
+        const topo = Math.min(
+            Math.max(topoIdeal, viewportTop + margem),
+            viewportBottom - margem - altura
+        );
 
-        popup.style.width =
-            largura +
-            'px';
-
-
-        popup.style.left =
-            esquerda +
-            'px';
-
-
-        const altura =
-            Math.min(
-                popup.offsetHeight,
-                CONFIG.autocomplete
-                    .alturaMaxima
-            );
-
-
-        if (
-            rect.top >
-            altura +
-            8
-        ) {
-            popup.style.top =
-                'auto';
-
-
-            popup.style.bottom =
-                (
-                    window.innerHeight -
-                    rect.top +
-                    6
-                ) +
-                'px';
-
-        } else {
-            popup.style.bottom =
-                'auto';
-
-
-            popup.style.top =
-                (
-                    rect.bottom +
-                    6
-                ) +
-                'px';
-        }
+        popup.style.setProperty(
+            '--way-autocomplete-max-height',
+            `${Math.max(48, Math.floor(altura))}px`
+        );
+        popup.style.top = `${Math.round(topo)}px`;
+        popup.style.bottom = 'auto';
     }
 
 
@@ -13881,7 +13091,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
                         </span>
 
                         <span class="way-ac-subtitle">
-                            Selecione uma categoria ou continue digitando
+                            Perfil ativo: ${escaparHTML(obterNomePerfilAtivo())} · Selecione uma categoria ou continue digitando
                         </span>
 
                     </div>
@@ -14131,6 +13341,18 @@ A previsão para realização do atendimento é dentro do período informado, n�
             return {
                 texto: 'Visita',
                 classe: 'visita'
+            };
+        }
+
+
+        if (
+            mensagemPossuiVariacaoGenero(
+                mensagem
+            )
+        ) {
+            return {
+                texto: '♂ / ♀',
+                classe: 'genero'
             };
         }
 
@@ -14415,6 +13637,13 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
                     </span>
 
+                    <span class="way-ac-actions">
+                        <span data-way-favorite title="Adicionar ou remover dos favoritos">
+                            ${obterExperienciaMensagens().favorites.includes(mensagem.id) ? '★' : '☆'}
+                        </span>
+                        <span data-way-preview title="Pré-visualizar antes de inserir">👁</span>
+                    </span>
+
                     <span class="way-ac-type ${badge.classe}">
                         ${escaparHTML(
                             badge.texto
@@ -14448,6 +13677,41 @@ A previsão para realização do atendimento é dentro do período informado, n�
                         event.stopPropagation();
 
 
+                        if (
+                            event.target.closest(
+                                '[data-way-favorite]'
+                            )
+                        ) {
+                            MESSAGE_CATALOG_MANAGER?.toggleFavoriteWithStorage?.(
+                                storage,
+                                setorMensagensAtivo,
+                                mensagem.id
+                            );
+
+                            renderizarComandosAutocomplete(
+                                campo,
+                                mensagens,
+                                opcoes
+                            );
+
+                            return;
+                        }
+
+
+                        if (
+                            event.target.closest(
+                                '[data-way-preview]'
+                            )
+                        ) {
+                            abrirPreviewMensagemAutocomplete(
+                                mensagem,
+                                campo
+                            );
+
+                            return;
+                        }
+
+
                         executarMensagemAutocomplete(
                             mensagem,
                             campo
@@ -14469,9 +13733,405 @@ A previsão para realização do atendimento é dentro do período informado, n�
     }
 
 
-    function executarMensagemAutocomplete(
+    function obterTextoBrutoMensagem(
+        mensagem,
+        genero = ''
+    ) {
+        return resolverVariacaoGenero(
+            obterTextoBrutoPorPeriodo(
+                mensagem
+            ),
+            genero
+        );
+    }
+
+
+    function obterTagsPendentesMensagem(
+        mensagem,
+        genero = ''
+    ) {
+        return MESSAGE_CATALOG_MANAGER?.unresolvedTags?.(
+            obterTextoBrutoMensagem(
+                mensagem,
+                genero
+            ),
+            obterDadosGlobaisSistema()
+        ) || [];
+    }
+
+
+    function abrirPreviewMensagemAutocomplete(
         mensagem,
         campo
+    ) {
+        fecharAutocomplete();
+
+        document.getElementById(
+            'way-message-preview-root'
+        )?.remove();
+
+        const resposta =
+            (mensagem.tipo || 'texto') === 'texto'
+                ? obterTextoMensagem(mensagem)
+                : obterPreviewAutocomplete(mensagem);
+
+        const tagsPendentes =
+            obterTagsPendentesMensagem(
+                mensagem
+            );
+
+        const overlay =
+            document.createElement(
+                'div'
+            );
+
+        overlay.id =
+            'way-message-preview-root';
+
+        overlay.className =
+            'way-special-overlay';
+
+        overlay.innerHTML = `
+            <div class="way-special-modal way-message-preview-modal">
+                <div class="way-special-header">
+                    <div>
+                        <h3 class="way-special-title">👁 !${escaparHTML(mensagem.comando)}</h3>
+                        <div class="way-special-subtitle">Perfil ativo: ${escaparHTML(obterNomePerfilAtivo())}</div>
+                    </div>
+                    <button type="button" class="way-special-close">×</button>
+                </div>
+                <div class="way-special-body">
+                    ${tagsPendentes.length ? `
+                        <div class="way-msg-tag-warning">
+                            ⚠ Não foi possível preencher ${escaparHTML(tagsPendentes.map(tag => `{{${tag}}}`).join(', '))}.
+                        </div>
+                    ` : ''}
+                    <div class="way-special-preview way-message-full-preview">${escaparHTML(resposta)}</div>
+                </div>
+                <div class="way-special-footer">
+                    <button type="button" class="way-special-cancel">Cancelar</button>
+                    <button type="button" class="way-special-insert">Inserir mensagem</button>
+                </div>
+            </div>
+        `;
+
+        const fechar = () => overlay.remove();
+
+        overlay.querySelector('.way-special-close')?.addEventListener('click', fechar);
+        overlay.querySelector('.way-special-cancel')?.addEventListener('click', fechar);
+        overlay.querySelector('.way-special-insert')?.addEventListener('click', () => {
+            fechar();
+            executarMensagemAutocomplete(mensagem, campo);
+        });
+        overlay.addEventListener('mousedown', event => {
+            if (event.target === overlay) {
+                fechar();
+            }
+        });
+
+        document.body.appendChild(overlay);
+    }
+
+
+    function abrirSeletorGeneroMensagem(
+        mensagem,
+        campo
+    ) {
+        fecharAutocomplete();
+
+
+        document.getElementById(
+            'way-message-gender-root'
+        )?.remove();
+
+
+        const opcoes = [
+            {
+                id: 'masculino',
+                icone: '♂',
+                titulo: 'Masculino',
+                exemplo: 'ajudá-lo'
+            },
+            {
+                id: 'feminino',
+                icone: '♀',
+                titulo: 'Feminino',
+                exemplo: 'ajudá-la'
+            }
+        ];
+
+
+        let indiceSelecionado =
+            0;
+
+
+        const overlay =
+            document.createElement(
+                'div'
+            );
+
+
+        overlay.id =
+            'way-message-gender-root';
+
+        overlay.className =
+            'way-special-overlay';
+
+        overlay.innerHTML = `
+            <div class="way-special-modal way-gender-modal" role="dialog" aria-modal="true" aria-labelledby="way-gender-title">
+                <div class="way-special-header">
+                    <div>
+                        <h3 class="way-special-title" id="way-gender-title">Personalizar !${escaparHTML(mensagem.comando)}</h3>
+                        <div class="way-special-subtitle">Selecione como a mensagem deve se referir ao cliente.</div>
+                    </div>
+                    <button type="button" class="way-special-close" aria-label="Fechar">×</button>
+                </div>
+                <div class="way-special-body">
+                    <div class="way-gender-options">
+                        ${opcoes.map((opcao, indice) => `
+                            <button
+                                type="button"
+                                class="way-gender-option ${indice === 0 ? 'active' : ''}"
+                                data-way-genero="${opcao.id}"
+                                aria-pressed="${indice === 0 ? 'true' : 'false'}"
+                            >
+                                <span class="way-gender-icon" aria-hidden="true">${opcao.icone}</span>
+                                <span class="way-gender-label">${opcao.titulo}</span>
+                                <span class="way-gender-example">${opcao.exemplo}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div class="way-gender-help">
+                        Use <strong>← →</strong> ou <strong>↑ ↓</strong> para escolher e <strong>Enter</strong> para inserir sem enviar.
+                    </div>
+                </div>
+            </div>
+        `;
+
+
+        const botoes =
+            [
+                ...overlay.querySelectorAll(
+                    '[data-way-genero]'
+                )
+            ];
+
+
+        const atualizarSelecao = () => {
+            botoes.forEach(
+                (
+                    botao,
+                    indice
+                ) => {
+                    const ativo =
+                        indice ===
+                        indiceSelecionado;
+
+
+                    botao.classList.toggle(
+                        'active',
+                        ativo
+                    );
+
+                    botao.setAttribute(
+                        'aria-pressed',
+                        String(
+                            ativo
+                        )
+                    );
+                }
+            );
+
+
+            botoes[
+                indiceSelecionado
+            ]?.focus(
+                {
+                    preventScroll:
+                        true
+                }
+            );
+        };
+
+
+        const fechar = () => {
+            document.removeEventListener(
+                'keydown',
+                aoPressionarTecla,
+                true
+            );
+
+
+            overlay.remove();
+        };
+
+
+        const escolher = genero => {
+            fechar();
+
+
+            executarMensagemAutocomplete(
+                mensagem,
+                campo,
+                genero
+            );
+        };
+
+
+        function aoPressionarTecla(
+            event
+        ) {
+            if (
+                !overlay.isConnected
+            ) {
+                return;
+            }
+
+
+            if (
+                [
+                    'ArrowLeft',
+                    'ArrowUp',
+                    'ArrowRight',
+                    'ArrowDown'
+                ].includes(
+                    event.key
+                )
+            ) {
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                const direcao =
+                    event.key ===
+                        'ArrowLeft' ||
+                    event.key ===
+                        'ArrowUp'
+                        ?
+                        -1
+                        :
+                        1;
+
+
+                indiceSelecionado =
+                    (
+                        indiceSelecionado +
+                        direcao +
+                        opcoes.length
+                    ) %
+                    opcoes.length;
+
+
+                atualizarSelecao();
+
+
+                return;
+            }
+
+
+            if (
+                event.key ===
+                'Enter'
+            ) {
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                escolher(
+                    opcoes[
+                        indiceSelecionado
+                    ].id
+                );
+
+
+                return;
+            }
+
+
+            if (
+                event.key ===
+                'Escape'
+            ) {
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                fechar();
+            }
+        }
+
+
+        botoes.forEach(
+            (
+                botao,
+                indice
+            ) => {
+                botao.addEventListener(
+                    'mouseenter',
+                    () => {
+                        indiceSelecionado =
+                            indice;
+
+
+                        atualizarSelecao();
+                    }
+                );
+
+
+                botao.addEventListener(
+                    'click',
+                    () => escolher(
+                        botao.dataset.wayGenero
+                    )
+                );
+            }
+        );
+
+
+        overlay.querySelector(
+            '.way-special-close'
+        )?.addEventListener(
+            'click',
+            fechar
+        );
+
+
+        overlay.addEventListener(
+            'mousedown',
+            event => {
+                if (
+                    event.target ===
+                    overlay
+                ) {
+                    fechar();
+                }
+            }
+        );
+
+
+        document.addEventListener(
+            'keydown',
+            aoPressionarTecla,
+            true
+        );
+
+
+        document.body.appendChild(
+            overlay
+        );
+
+
+        atualizarSelecao();
+    }
+
+
+    function executarMensagemAutocomplete(
+        mensagem,
+        campo,
+        genero = ''
     ) {
         if (
             !mensagem ||
@@ -14487,6 +14147,31 @@ A previsão para realização do atendimento é dentro do período informado, n�
         const tipo =
             mensagem.tipo ||
             'texto';
+
+
+        if (
+            tipo ===
+                'texto' &&
+            mensagemPossuiVariacaoGenero(
+                mensagem
+            ) &&
+            !genero
+        ) {
+            abrirSeletorGeneroMensagem(
+                mensagem,
+                campo
+            );
+
+
+            return;
+        }
+
+
+        MESSAGE_CATALOG_MANAGER?.recordUseWithStorage?.(
+            storage,
+            setorMensagensAtivo,
+            mensagem.id
+        );
 
 
         if (
@@ -14545,10 +14230,54 @@ A previsão para realização do atendimento é dentro do período informado, n�
         }
 
 
+        if (
+            tipo ===
+            'imagem'
+        ) {
+            anexarImagemMensagem(
+                campo,
+                mensagem
+            )
+                .catch(
+                    erro => {
+                        console.error(
+                            '[Way Mensagens] Não foi possível anexar a imagem:',
+                            erro
+                        );
+
+
+                        window.alert(
+                            erro?.message ||
+                            'Não foi possível anexar a imagem ao atendimento.'
+                        );
+                    }
+                );
+
+
+            return;
+        }
+
+
         const resposta =
             obterTextoMensagem(
-                mensagem
+                mensagem,
+                genero
             );
+
+        const tagsPendentes =
+            obterTagsPendentesMensagem(
+                mensagem,
+                genero
+            );
+
+        if (
+            tagsPendentes.length &&
+            !window.confirm(
+                `Não foi possível preencher: ${tagsPendentes.map(tag => `{{${tag}}}`).join(', ')}. Inserir mesmo assim?`
+            )
+        ) {
+            return;
+        }
 
 
         if (
@@ -15973,6 +15702,18 @@ A previsão para realização do atendimento é dentro do período informado, n�
             posicionarAutocomplete,
             true
         );
+
+
+        window.visualViewport?.addEventListener(
+            'resize',
+            posicionarAutocomplete
+        );
+
+
+        window.visualViewport?.addEventListener(
+            'scroll',
+            posicionarAutocomplete
+        );
     }
 
 
@@ -16179,6 +15920,9 @@ A previsão para realização do atendimento é dentro do período informado, n�
         carregarMensagens();
 
 
+        iniciarCoordenacaoNotificacoes();
+
+
         aplicarTemaAplicativo();
 
 
@@ -16224,7 +15968,7 @@ A previsão para realização do atendimento é dentro do período informado, n�
 
 
         console.log(
-            '[Way Mensagens] v3.7 ativa.'
+            '[Way Mensagens] v3.10 ativa.'
         );
 
 

@@ -6,15 +6,51 @@
     <title>Way Tools</title>
     <link rel="stylesheet" href="popup.css" />
     <script src="../config/scripts.js" defer></script>
+    <script src="../config/default-messages.js" defer></script>
+    <script src="../content/message-catalog-manager.js" defer></script>
+  <script src="../content/backup-manager.js" defer></script>
+  <script src="diagnostics.js" defer></script>
     <script src="popup.js" defer></script>
   </head>
   <body>
+    <section id="sector-onboarding" class="sector-onboarding" aria-labelledby="sector-onboarding-title" hidden>
+      <div class="sector-dialog" role="dialog" aria-modal="true">
+        <img class="sector-dialog-logo" src="../128.png" alt="" aria-hidden="true" />
+        <span class="eyebrow">Configuração inicial</span>
+        <h2 id="sector-onboarding-title">Como você usará o Way Tools?</h2>
+        <p>Escolha seu setor para carregar os atalhos corretos no ChatWoot e no Matrix.</p>
+
+        <div class="sector-options" role="radiogroup" aria-label="Setor de atendimento">
+          <label class="sector-option">
+            <input type="radio" name="initial-sector" value="n2" />
+            <span class="sector-option-copy">
+              <strong>N2</strong>
+              <small>Usar as mensagens padrão atuais e suas personalizações.</small>
+            </span>
+            <span class="sector-option-check" aria-hidden="true">✓</span>
+          </label>
+          <label class="sector-option">
+            <input type="radio" name="initial-sector" value="sac" />
+            <span class="sector-option-copy">
+              <strong>SAC</strong>
+              <small>Começar sem mensagens padrão e criar seu próprio catálogo.</small>
+            </span>
+            <span class="sector-option-check" aria-hidden="true">✓</span>
+          </label>
+        </div>
+
+        <p class="sector-persistence-note">As mensagens de cada setor ficam salvas separadamente neste navegador.</p>
+        <button id="confirm-initial-sector" class="primary-action" type="button" disabled>Continuar</button>
+      </div>
+    </section>
+
     <header class="app-header">
       <img class="brand-mark" src="../128.png" alt="" aria-hidden="true" />
       <div class="brand-copy">
         <h1>Way Tools</h1>
         <p>Ferramentas para sua rotina</p>
       </div>
+      <span class="profile-badge" id="active-profile-badge">Perfil: N2</span>
       <span class="version" id="extension-version"></span>
     </header>
 
@@ -100,6 +136,24 @@
           </div>
         </div>
 
+        <section class="settings-card sector-settings" aria-labelledby="sector-settings-title">
+          <div class="settings-card-header">
+            <span class="settings-icon" aria-hidden="true">👥</span>
+            <div>
+              <strong id="sector-settings-title">Setor de atendimento</strong>
+              <p>Troque o catálogo usado ao mesmo tempo no ChatWoot e no Matrix.</p>
+            </div>
+          </div>
+
+          <label class="field-label" for="message-sector">Perfil de mensagens</label>
+          <select id="message-sector">
+            <option value="n2">N2 — mensagens padrão atuais</option>
+            <option value="sac">SAC — catálogo separado</option>
+          </select>
+          <p id="message-sector-description" class="field-help"></p>
+          <p id="message-sector-status" class="settings-status" role="status" aria-live="polite"></p>
+        </section>
+
         <section class="settings-card notification-settings" aria-labelledby="notification-settings-title">
           <div class="settings-card-header">
             <span class="settings-icon" aria-hidden="true">🔔</span>
@@ -135,6 +189,46 @@
           </div>
           <p id="notification-settings-status" class="settings-status" role="status" aria-live="polite"></p>
         </section>
+
+        <section class="settings-card backup-settings" aria-labelledby="backup-settings-title">
+          <div class="settings-card-header">
+            <span class="settings-icon" aria-hidden="true">💾</span>
+            <div>
+              <strong id="backup-settings-title">Backup completo</strong>
+              <p>Salve ou restaure configurações, mensagens, dicionário e preferências do Way Tools.</p>
+            </div>
+          </div>
+
+          <div class="backup-actions">
+            <button id="export-backup" class="secondary-action" type="button">Exportar backup</button>
+            <button id="select-backup" class="secondary-action" type="button">Selecionar arquivo</button>
+            <input id="backup-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <label class="field-label" for="backup-mode">Como restaurar</label>
+          <select id="backup-mode">
+            <option value="merge">Mesclar — manter dados que não estão no arquivo</option>
+            <option value="replace">Substituir — usar somente os dados do backup</option>
+          </select>
+          <button id="undo-backup-import" class="secondary-action" type="button">Desfazer última importação</button>
+          <p class="field-help">Antes de importar, o Way Tools cria automaticamente um ponto de restauração local.</p>
+          <p id="backup-status" class="settings-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <details id="diagnostics-center" class="settings-card diagnostics-panel">
+          <summary>
+            <span class="settings-icon" aria-hidden="true">🩺</span>
+            <span>
+              <strong>Central de diagnóstico</strong>
+              <small>Módulos, catálogos, sincronização e possíveis conflitos</small>
+            </span>
+            <span class="summary-arrow" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="diagnostics-content">
+            <div id="diagnostics-list" class="diagnostics-list"></div>
+            <button id="refresh-diagnostics" class="secondary-action" type="button">Atualizar diagnóstico</button>
+            <p id="diagnostics-status" class="settings-status" role="status" aria-live="polite"></p>
+          </div>
+        </details>
 
         <details id="personal-dictionary" class="settings-card dictionary-panel">
           <summary>
@@ -175,9 +269,40 @@
           </div>
         </details>
 
+        <section id="developer-settings" class="settings-card developer-settings" aria-labelledby="developer-settings-title" hidden>
+          <div class="settings-card-header">
+            <span class="settings-icon developer-icon" aria-hidden="true">🧪</span>
+            <div>
+              <div class="developer-heading">
+                <strong id="developer-settings-title">Modo desenvolvedor</strong>
+                <span>INTERNO</span>
+              </div>
+              <p>Teste o Gerador de Relato e desenvolva catálogos SAC/N2 sem alterar os ambientes de atendimento.</p>
+            </div>
+          </div>
+
+          <div class="developer-actions">
+            <button id="test-report-generator" class="developer-action" type="button">
+              Abrir Estúdio do Gerador
+            </button>
+            <button id="review-sac-catalog" class="developer-action" type="button">
+              Abrir Estúdio de Mensagens
+            </button>
+            <button id="disable-developer-mode" class="developer-action secondary" type="button">
+              Ocultar modo desenvolvedor
+            </button>
+          </div>
+          <p id="developer-status" class="settings-status" role="status" aria-live="polite"></p>
+        </section>
+
         <section class="about-card">
-          <strong>Way Tools</strong>
-          <span>Uso interno • Internet Way</span>
+          <div>
+            <strong>Way Tools</strong>
+            <span>Uso interno • Internet Way</span>
+          </div>
+          <a class="privacy-link" href="../docs/index.html" target="_blank" rel="noopener noreferrer">
+            Política de Privacidade
+          </a>
         </section>
       </section>
     </main>

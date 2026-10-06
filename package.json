@@ -1,12 +1,13 @@
 {
   "name": "way-tools-extension",
-  "version": "0.6.9",
+  "version": "0.7.2",
   "private": true,
   "description": "Extensão Chrome Way Tools",
   "scripts": {
     "build:messages": "node scripts/build-native-messages.mjs",
+    "build:privacy": "node scripts/sync-privacy-policy.mjs",
     "commit:context": "node scripts/commit-context.mjs",
-    "test": "node tests/validate-extension.mjs",
-    "package": "npm run build:messages && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1"
+    "test": "node tests/validate-extension.mjs && node --test tests/*.functional.test.mjs",
+    "package": "npm run build:messages && npm run build:privacy && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1"
   }
 }

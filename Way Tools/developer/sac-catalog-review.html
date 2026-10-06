@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Estúdio de Mensagens — Way Tools</title>
+    <link rel="stylesheet" href="sac-catalog-review.css" />
+    <script src="sac-catalog-review.js" defer></script>
+  </head>
+  <body>
+    <header class="studio-header">
+      <div class="brand">
+        <img src="../128.png" alt="" aria-hidden="true" />
+        <div>
+          <span>WAY TOOLS • MODO DESENVOLVEDOR</span>
+          <h1>Estúdio de Catálogos de Mensagens</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="save-draft" class="button primary" type="button">Salvar rascunho</button>
+        <button id="import-json" class="button" type="button">Importar JSON</button>
+        <button id="copy-json" class="button" type="button">Copiar JSON</button>
+        <button id="download-draft" class="button success" type="button">Exportar rascunho</button>
+        <input id="import-file" type="file" accept=".json,application/json" hidden />
+      </div>
+    </header>
+
+    <section class="safety-notice" aria-labelledby="safety-title">
+      <span class="notice-icon" aria-hidden="true">🧪</span>
+      <div>
+        <strong id="safety-title">Laboratório isolado dos atendimentos</strong>
+        <p>Crie categorias e mensagens para SAC ou N2, valide a proposta e exporte o JSON para incorporação. Nada nesta tela altera o catálogo usado pelos atendentes.</p>
+      </div>
+      <button id="reset-draft" class="text-button danger" type="button">Restaurar proposta original</button>
+    </section>
+
+    <main class="studio-layout">
+      <aside class="catalog-sidebar" aria-label="Perfis e categorias">
+        <div class="sidebar-heading">
+          <span>PERFIL EM EDIÇÃO</span>
+          <span id="profile-version-badge">v1</span>
+        </div>
+        <div class="profile-switch" role="group" aria-label="Selecionar perfil">
+          <button class="profile-button" type="button" data-profile="sac">SAC</button>
+          <button class="profile-button" type="button" data-profile="n2">N2</button>
+        </div>
+        <label class="compact-field">
+          <span>Versão do catálogo</span>
+          <input id="profile-version" type="number" min="1" step="1" />
+        </label>
+        <div class="sidebar-section-heading">
+          <strong>Categorias</strong>
+          <button id="add-category" class="mini-button primary" type="button">＋ Nova</button>
+        </div>
+        <label class="search-field compact">
+          <span class="sr-only">Buscar categoria</span>
+          <input id="category-search" type="search" placeholder="Buscar categoria" autocomplete="off" />
+        </label>
+        <nav id="category-list" class="category-list" aria-live="polite"></nav>
+        <div class="catalog-summary">
+          <span id="category-count">0 categorias</span>
+          <span id="message-count">0 mensagens</span>
+        </div>
+        <div id="catalog-audit" class="catalog-audit">Auditando catálogo…</div>
+      </aside>
+
+      <section class="messages-workspace" aria-labelledby="workspace-title">
+        <div class="workspace-heading">
+          <div>
+            <span class="eyebrow">CATEGORIA SELECIONADA</span>
+            <h2 id="workspace-title">Carregando catálogo…</h2>
+            <p id="workspace-description"></p>
+          </div>
+          <div class="workspace-actions">
+            <button id="move-category-up" class="button" type="button" title="Mover categoria para cima">↑ Categoria</button>
+            <button id="move-category-down" class="button" type="button" title="Mover categoria para baixo">↓ Categoria</button>
+            <button id="edit-category" class="button" type="button">Editar categoria</button>
+            <button id="add-message" class="button primary" type="button">＋ Nova mensagem</button>
+          </div>
+        </div>
+
+        <div class="filters-row">
+          <label class="search-field">
+            <span>Buscar mensagens</span>
+            <input id="message-search" type="search" placeholder="Comando, texto, sinônimo ou palavra relacionada" autocomplete="off" />
+          </label>
+          <label class="toggle-field">
+            <input id="first-package-only" type="checkbox" />
+            <span>Somente primeiro pacote</span>
+          </label>
+        </div>
+
+        <div id="message-list" class="message-list" aria-live="polite"></div>
+        <p id="empty-state" class="empty-state" hidden>Nenhuma mensagem corresponde aos filtros atuais.</p>
+      </section>
+
+      <aside class="message-preview" aria-labelledby="preview-title">
+        <div class="preview-heading">
+          <span class="eyebrow">PRÉ-VISUALIZAÇÃO</span>
+          <h2 id="preview-title">Selecione uma mensagem</h2>
+          <p id="preview-meta">A mensagem será exibida aqui com dados fictícios nas tags.</p>
+        </div>
+        <div id="preview-warning" class="preview-warning" hidden></div>
+        <div id="preview-content" class="preview-content">Nenhuma mensagem selecionada.</div>
+        <div id="preview-periods" class="preview-periods" hidden></div>
+        <div class="preview-tags">
+          <strong>Tags disponíveis</strong>
+          <div id="available-tags"></div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="studio-footer">
+      <span id="studio-status" role="status" aria-live="polite">Preparando o estúdio…</span>
+      <span>O rascunho é salvo no armazenamento local da extensão e sobrevive a atualizações.</span>
+    </footer>
+
+    <dialog id="category-dialog" class="editor-dialog">
+      <form id="category-form" method="dialog">
+        <header>
+          <div><span class="eyebrow">CATEGORIA</span><h2 id="category-dialog-title">Nova categoria</h2></div>
+          <button class="icon-button" type="button" data-close-dialog="category-dialog" aria-label="Fechar">×</button>
+        </header>
+        <div class="dialog-fields">
+          <input id="category-original-id" type="hidden" />
+          <label><span>Identificador técnico</span><input id="category-id" type="text" maxlength="80" placeholder="ex.: financeiro" required /><small>Use letras minúsculas, números, hífen ou sublinhado.</small></label>
+          <label><span>Nome exibido</span><input id="category-label" type="text" maxlength="120" placeholder="Ex.: 💳 Financeiro" required /></label>
+          <label><span>Ordem de exibição</span><input id="category-order" type="number" min="0" max="99999" step="1" required /></label>
+          <fieldset>
+            <legend>Disponível para</legend>
+            <label class="check-card"><input id="category-sector-sac" type="checkbox" value="sac" /><span><strong>SAC</strong><small>Atendimento e relacionamento</small></span></label>
+            <label class="check-card"><input id="category-sector-n2" type="checkbox" value="n2" /><span><strong>N2</strong><small>Suporte especializado</small></span></label>
+          </fieldset>
+        </div>
+        <p id="category-error" class="dialog-error" role="alert" hidden></p>
+        <footer>
+          <button id="delete-category" class="button danger" type="button" hidden>Excluir categoria</button>
+          <span class="footer-spacer"></span>
+          <button class="button" type="button" data-close-dialog="category-dialog">Cancelar</button>
+          <button class="button primary" type="submit">Salvar categoria</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="message-dialog" class="editor-dialog message-dialog">
+      <form id="message-form" method="dialog">
+        <header>
+          <div><span class="eyebrow">MENSAGEM</span><h2 id="message-dialog-title">Nova mensagem</h2></div>
+          <button class="icon-button" type="button" data-close-dialog="message-dialog" aria-label="Fechar">×</button>
+        </header>
+        <div class="dialog-fields message-fields">
+          <input id="message-original-id" type="hidden" />
+          <div class="fields-two">
+            <label><span>Identificador técnico</span><input id="message-id" type="text" maxlength="100" placeholder="sac-segundavia" required /><small>Permanece estável entre atualizações.</small></label>
+            <label><span>Comando</span><span class="command-input"><b>!</b><input id="message-command" type="text" maxlength="40" placeholder="segundavia" required /></span></label>
+          </div>
+          <div class="fields-two">
+            <label><span>Categoria</span><select id="message-category" required></select></label>
+            <label><span>Tipo de automação</span><select id="message-type"><option value="texto">Mensagem de texto</option><option value="disponibilidade">Disponibilidade de atendimento</option><option value="visita">Visita técnica</option><option value="imagem">Imagem da extensão</option></select></label>
+          </div>
+          <label><span>Título interno</span><input id="message-title" type="text" maxlength="180" placeholder="Explique resumidamente a finalidade" /></label>
+          <div class="fields-two">
+            <label><span>Sinônimos</span><input id="message-synonyms" type="text" placeholder="boleto, 2via" /><small>Também localizam a mensagem na busca.</small></label>
+            <label><span>Palavras relacionadas</span><input id="message-keywords" type="text" placeholder="fatura, vencimento" /></label>
+          </div>
+          <div class="fields-two">
+            <label><span>Estado da proposta</span><select id="message-status"><option value="planejado">Planejado</option><option value="aguardando_aprovacao">Aguardando aprovação</option><option value="aprovado">Aprovado para implementação</option></select></label>
+            <label class="check-card inline"><input id="message-first-package" type="checkbox" /><span><strong>Primeiro pacote</strong><small>Destacar como prioridade inicial do perfil.</small></span></label>
+          </div>
+
+          <section id="text-options" class="type-section">
+            <label class="check-card inline"><input id="message-time-variant" type="checkbox" /><span><strong>Mensagem diferente conforme o horário</strong><small>Manhã 05:00–11:59 · Tarde 12:00–17:59 · Noite 18:00–04:59</small></span></label>
+            <div id="normal-message-field"><label><span>Mensagem</span><textarea id="message-text" rows="9"></textarea></label></div>
+            <div id="time-message-fields" class="period-editor" hidden>
+              <label><span>🌅 Manhã</span><textarea id="message-morning" rows="8"></textarea></label>
+              <label><span>☀️ Tarde</span><textarea id="message-afternoon" rows="8"></textarea></label>
+              <label><span>🌙 Noite</span><textarea id="message-night" rows="8"></textarea></label>
+            </div>
+          </section>
+
+          <section id="availability-options" class="type-section special-info" hidden>
+            <strong>📅 Disponibilidade de atendimento</strong>
+            <p>Ao executar o comando, o ChatWoot e o Matrix abrirão o seletor de datas e períodos.</p>
+          </section>
+
+          <section id="visit-options" class="type-section" hidden>
+            <label><span>Texto padrão da visita técnica</span><textarea id="message-visit-template" rows="12"></textarea></label>
+          </section>
+
+          <section id="image-options" class="type-section" hidden>
+            <label><span>Arquivo PNG dentro da extensão</span><input id="message-image-file" type="text" placeholder="assets/mensagens/enviarimagem.png" /></label>
+            <p>O arquivo será anexado ao atendimento para conferência, sem envio automático.</p>
+          </section>
+
+          <section class="tags-box">
+            <strong>🏷 Inserir tag no campo ativo</strong>
+            <div id="editor-tags" class="tag-buttons"></div>
+          </section>
+
+          <section class="live-preview">
+            <div><strong>👁 Pré-visualização</strong><span id="editor-preview-warning"></span></div>
+            <div id="editor-preview-content">A prévia aparecerá aqui.</div>
+          </section>
+        </div>
+        <p id="message-error" class="dialog-error" role="alert" hidden></p>
+        <footer>
+          <button id="delete-message" class="button danger" type="button" hidden>Excluir</button>
+          <button id="duplicate-message" class="button" type="button" hidden>Duplicar</button>
+          <span class="footer-spacer"></span>
+          <button class="button" type="button" data-close-dialog="message-dialog">Cancelar</button>
+          <button class="button primary" type="submit">Salvar mensagem</button>
+        </footer>
+      </form>
+    </dialog>
+  </body>
+</html>

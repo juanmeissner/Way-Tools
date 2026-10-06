@@ -5,7 +5,7 @@
     Object.freeze({
       id: "way-mensagens",
       name: "Mensagens Personalizadas",
-      version: "3.7",
+      version: "3.10",
       description: "Mensagens, autocomplete, dados do cliente, visitas técnicas, alertas de inatividade e notificações de novas mensagens.",
       matches: Object.freeze(["https://ia-nocodb.internetway.com.br/*"]),
       defaultEnabled: true
@@ -21,8 +21,8 @@
     Object.freeze({
       id: "way-erp-gerador-relato",
       name: "ERP — Gerador de Relato",
-      version: "1.1",
-      description: "Assistente dinâmico que adapta problemas, verificações e ações ao motivo e aos produtos selecionados.",
+      version: "1.13",
+      description: "Assistente dinâmico com rascunho automático, suporte ao Way Vision e estúdio visual para vincular, priorizar, ordenar e simular opções.",
       matches: Object.freeze(["https://erp.internetway.com.br/*"]),
       defaultEnabled: true
     }),
@@ -46,7 +46,7 @@
     Object.freeze({
       id: "matrix-mensagens",
       name: "Matrix — Mensagens Personalizadas",
-      version: "1.0",
+      version: "1.1",
       description: "Comandos com !, tags do cliente e configuração de mensagens no modelo clássico do Matrix.",
       matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
       defaultEnabled: true
@@ -65,7 +65,7 @@
       version: "1.1",
       description: "Tema claro, escuro ou automático exclusivo do Matrix.",
       matches: Object.freeze(["https://wayinternet.matrixdobrasil.ai/*"]),
-      defaultEnabled: false
+      defaultEnabled: true
     }),
     Object.freeze({
       id: "matrix-corrigir-colagem",

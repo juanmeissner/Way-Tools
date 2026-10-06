@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import vm from "node:vm";
 import {
+  loadNativeMessageCatalog,
   loadNativeMessages,
   renderNativeMessagesModule
 } from "../scripts/build-native-messages.mjs";
@@ -46,6 +47,20 @@ assert.ok(
     chatwootRuntimeEntry.js.indexOf("scripts/way-mensagens.js"),
   "As mensagens nativas precisam ser carregadas antes do script Way Mensagens."
 );
+assert.ok(
+  chatwootRuntimeEntry.js.indexOf("config/default-messages.js") <
+    chatwootRuntimeEntry.js.indexOf("content/message-catalog-manager.js") &&
+    chatwootRuntimeEntry.js.indexOf("content/message-catalog-manager.js") <
+      chatwootRuntimeEntry.js.indexOf("content/message-experience.js") &&
+    chatwootRuntimeEntry.js.indexOf("content/message-experience.js") <
+      chatwootRuntimeEntry.js.indexOf("scripts/way-mensagens.js"),
+  "Os módulos de catálogo e experiência precisam carregar antes do ChatWoot."
+);
+assert.ok(
+  chatwootRuntimeEntry.js.indexOf("content/instance-coordinator.js") <
+    chatwootRuntimeEntry.js.indexOf("scripts/way-mensagens.js"),
+  "A coordenação entre instalações precisa iniciar antes das notificações."
+);
 for (const entry of manifest.content_scripts) {
   if (entry.world === "MAIN") {
     continue;
@@ -69,7 +84,7 @@ const referencedFiles = [
   manifest.action.default_popup,
   ...Object.values(manifest.action.default_icon),
   ...Object.values(manifest.icons),
-  ...manifest.content_scripts.flatMap((entry) => entry.js)
+  ...manifest.content_scripts.flatMap((entry) => [...entry.js, ...(entry.css || [])])
 ];
 
 for (const relativePath of new Set(referencedFiles)) {
@@ -97,7 +112,14 @@ assert.equal(manifest.icons["128"], "128.png", "O logotipo principal deve ser sa
 
 const catalogSource = readFileSync(resolve(extensionRoot, "config/scripts.js"), "utf8");
 const nativeMessagesSource = readFileSync(resolve(extensionRoot, "config/default-messages.js"), "utf8");
+const messageCatalogManagerSource = readFileSync(
+  resolve(extensionRoot, "content/message-catalog-manager.js"),
+  "utf8"
+);
+const messageExperienceSource = readFileSync(resolve(extensionRoot, "content/message-experience.js"), "utf8");
+const backupManagerSource = readFileSync(resolve(extensionRoot, "content/backup-manager.js"), "utf8");
 const scriptSource = readFileSync(resolve(extensionRoot, "scripts/way-mensagens.js"), "utf8");
+const wayMessagesStyleSource = readFileSync(resolve(extensionRoot, "styles/way-mensagens.css"), "utf8");
 const erpScriptSource = readFileSync(resolve(extensionRoot, "scripts/way-erp-copiar-dados.js"), "utf8");
 const erpReportGeneratorSource = readFileSync(resolve(extensionRoot, "scripts/way-erp-gerador-relato.js"), "utf8");
 const compactInterfaceSource = readFileSync(resolve(extensionRoot, "scripts/way-interface-compacta.js"), "utf8");
@@ -110,6 +132,7 @@ const spellingScriptSource = readFileSync(resolve(extensionRoot, "scripts/way-co
 const spellingDictionarySource = readFileSync(resolve(extensionRoot, "config/spelling-dictionary.js"), "utf8");
 const spellingEngineSource = readFileSync(resolve(extensionRoot, "content/spelling-engine.js"), "utf8");
 const runtimeSource = readFileSync(resolve(extensionRoot, "content/runtime.js"), "utf8");
+const instanceCoordinatorSource = readFileSync(resolve(extensionRoot, "content/instance-coordinator.js"), "utf8");
 const chatwootRealtimeBridgeSource = readFileSync(
   resolve(extensionRoot, "content/chatwoot-realtime-bridge.js"),
   "utf8"
@@ -117,32 +140,167 @@ const chatwootRealtimeBridgeSource = readFileSync(
 const messageNotificationPolicySource = readFileSync(resolve(extensionRoot, "content/message-notification-policy.js"), "utf8");
 const backgroundServiceWorkerSource = readFileSync(resolve(extensionRoot, "background/service-worker.js"), "utf8");
 const popupSource = readFileSync(resolve(extensionRoot, "popup/popup.js"), "utf8");
+const popupDiagnosticsSource = readFileSync(resolve(extensionRoot, "popup/diagnostics.js"), "utf8");
 const popupHtmlSource = readFileSync(resolve(extensionRoot, "popup/popup.html"), "utf8");
+const developerPreviewHtmlSource = readFileSync(
+  resolve(extensionRoot, "developer/report-generator-preview.html"),
+  "utf8"
+);
+const developerPreviewSource = readFileSync(
+  resolve(extensionRoot, "developer/report-generator-preview.js"),
+  "utf8"
+);
+const sacDraft = JSON.parse(readFileSync(resolve(extensionRoot, "data/mensagens-sac-rascunho.json"), "utf8"));
+const sacReviewHtmlSource = readFileSync(resolve(extensionRoot, "developer/sac-catalog-review.html"), "utf8");
+const sacReviewSource = readFileSync(resolve(extensionRoot, "developer/sac-catalog-review.js"), "utf8");
 const privacyPolicySource = readFileSync(resolve(root, "docs/index.html"), "utf8");
+const extensionPrivacyPolicySource = readFileSync(resolve(extensionRoot, "docs/index.html"), "utf8");
+assert.equal(
+  extensionPrivacyPolicySource,
+  privacyPolicySource,
+  "A página pública precisa estar sincronizada com a política principal da extensão."
+);
 assert.match(popupHtmlSource, /<img class="brand-mark" src="\.\.\/128\.png"/);
+assert.match(popupHtmlSource, /src="\.\.\/content\/message-catalog-manager\.js"/);
+assert.match(popupHtmlSource, /src="\.\.\/content\/backup-manager\.js"/);
+assert.match(popupHtmlSource, /src="diagnostics\.js"/);
 assert.doesNotMatch(popupHtmlSource, /<span class="brand-mark"[^>]*>W<\/span>/);
 for (const tabName of ["home", "tools", "settings"]) {
   assert.match(popupHtmlSource, new RegExp(`data-tab-target="${tabName}"`));
   assert.match(popupHtmlSource, new RegExp(`data-tab-panel="${tabName}"`));
 }
 assert.match(popupHtmlSource, /id="compatible-scripts-list"/);
+assert.match(popupHtmlSource, /id="active-profile-badge"/);
+assert.match(popupHtmlSource, /id="diagnostics-center"/);
+assert.match(popupHtmlSource, /href="\.\.\/docs\/index\.html"/);
+assert.match(popupHtmlSource, />\s*Política de Privacidade\s*</);
+assert.match(popupHtmlSource, /id="refresh-diagnostics"/);
+assert.match(popupHtmlSource, /id="export-backup"/);
+assert.match(popupHtmlSource, /id="backup-mode"/);
+assert.match(popupHtmlSource, /id="undo-backup-import"/);
 assert.match(popupSource, /function activateTab\(/);
 assert.match(popupSource, /function renderCompatibleScripts\(/);
 assert.match(popupSource, /function createScriptGroup\(/);
 assert.match(popupSource, /label:\s*"ChatWoot"/);
 assert.match(popupSource, /label:\s*"ERP Way"/);
 assert.match(popupSource, /label:\s*"Matrix"/);
+assert.match(popupHtmlSource, /id="developer-settings"[^>]*hidden/);
+assert.match(popupHtmlSource, /id="test-report-generator"/);
+assert.match(popupHtmlSource, /id="review-sac-catalog"/);
+assert.match(popupHtmlSource, /id="disable-developer-mode"/);
+assert.match(popupSource, /developerModeClickTarget\s*=\s*7/);
+assert.match(popupSource, /wayTools\.developerMode\.enabled/);
+assert.match(popupSource, /chrome\.runtime\.getURL\("developer\/report-generator-preview\.html"\)/);
+assert.match(popupSource, /chrome\.runtime\.getURL\("developer\/sac-catalog-review\.html"\)/);
+assert.match(sacReviewHtmlSource, /id="first-package-only"/);
+for (const elementId of [
+  "save-draft",
+  "import-json",
+  "copy-json",
+  "download-draft",
+  "profile-version",
+  "category-list",
+  "add-category",
+  "message-list",
+  "add-message",
+  "category-dialog",
+  "message-dialog",
+  "message-time-variant",
+  "message-visit-template",
+  "editor-tags",
+  "catalog-audit"
+]) {
+  assert.match(sacReviewHtmlSource, new RegExp(`id="${elementId}"`));
+}
+assert.match(sacReviewSource, /mensagens-sac-rascunho\.json/);
+assert.match(sacReviewSource, /data\/mensagens-nativas\.json/);
+assert.match(sacReviewSource, /wayTools\.developer\.messageCatalogDraft\.v1/);
+assert.match(sacReviewSource, /chrome\.storage\.local\.set/);
+assert.match(sacReviewSource, /function mergeLegacySacDraft\(/);
+assert.match(sacReviewSource, /function auditCatalog\(/);
+assert.match(sacReviewSource, /function openCategoryEditor\(/);
+assert.match(sacReviewSource, /function openMessageEditor\(/);
+assert.match(sacReviewSource, /function saveCategory\(/);
+assert.match(sacReviewSource, /function saveMessage\(/);
+assert.match(sacReviewSource, /function importJson\(/);
+assert.match(sacReviewSource, /function exportJson\(/);
+assert.match(sacReviewSource, /navigator\.clipboard\.writeText/);
+assert.match(sacReviewSource, /new Blob\(/);
+assert.match(sacReviewSource, /variacaoHorario/);
+assert.match(sacReviewSource, /templateVisita/);
+assert.match(developerPreviewHtmlSource, /class="ql-editor dx-htmleditor-content" contenteditable="true"/);
+assert.match(developerPreviewHtmlSource, /src="\.\.\/scripts\/way-erp-gerador-relato\.js"/);
+for (const elementId of [
+  "stage-list",
+  "categories-list",
+  "stage-preview-content",
+  "add-category",
+  "export-json",
+  "copy-json",
+  "reset-catalog",
+  "catalog-audit",
+  "catalog-editor-dialog",
+  "editor-relations-field",
+  "relation-products-options",
+  "relation-contacts-options",
+  "relation-requests-options",
+  "relation-issues-options",
+  "editor-order",
+  "editor-priority-enabled",
+  "editor-priority-order"
+]) {
+  assert.match(developerPreviewHtmlSource, new RegExp(`id="${elementId}"`));
+}
+assert.match(developerPreviewSource, /globalThis\.WayToolsRuntime\s*=\s*\{/);
+assert.match(developerPreviewSource, /scriptId\s*===\s*"way-erp-gerador-relato"/);
+assert.match(developerPreviewSource, /wayTools\.developer\.reportGeneratorCatalog\.v1/);
+assert.match(developerPreviewSource, /function renderStageList\(/);
+assert.match(developerPreviewSource, /function renderCategories\(/);
+assert.match(developerPreviewSource, /function renderPreview\(/);
+assert.match(developerPreviewSource, /function auditCatalog\(/);
+assert.match(developerPreviewSource, /function saveEditor\(/);
+assert.match(developerPreviewSource, /function renderRelations\(/);
+assert.match(developerPreviewSource, /function relationCapabilities\(/);
+assert.match(developerPreviewSource, /function orderedOptionEntries\(/);
+assert.match(developerPreviewSource, /function mergeCatalogWithBaseline\(/);
+assert.match(developerPreviewSource, /baselineProducts\.includes\("way_vision"\)/);
+assert.match(developerPreviewSource, /move-option-up/);
+assert.match(developerPreviewSource, /move-option-down/);
+assert.match(developerPreviewSource, /WAY_TOOLS_REPORT_GENERATOR_DEVELOPER_OVERRIDE/);
+assert.match(developerPreviewSource, /searchParams\.set\("simulate", "1"\)/);
+assert.match(developerPreviewSource, /function exportJson\(/);
+assert.match(developerPreviewSource, /function copyJson\(/);
+assert.match(developerPreviewSource, /localStorage\.setItem\(STORAGE_KEY/);
+assert.match(developerPreviewSource, /new Blob\(/);
+assert.match(developerPreviewSource, /referencia verificação inexistente/);
+assert.match(developerPreviewSource, /referencia solicitação inexistente/);
+assert.match(developerPreviewSource, /referencia problema inexistente/);
 assert.match(privacyPolicySource, /<code>notifications<\/code>/);
 assert.match(privacyPolicySource, /<code>alarms<\/code>/);
 assert.match(privacyPolicySource, /chrome\.storage\.session/);
+assert.match(privacyPolicySource, /localStorage/);
+assert.match(privacyPolicySource, /Última atualização: 5 de outubro de 2026/);
+assert.match(privacyPolicySource, /chrome\.storage\.sync/);
+assert.match(privacyPolicySource, /somente o identificador do perfil/);
+assert.match(privacyPolicySource, /https:\/\/wayinternet\.matrixdobrasil\.ai\/\*/);
+assert.match(privacyPolicySource, /perfis N2 e SAC/);
+assert.match(privacyPolicySource, /Gerador de Relato/);
+assert.match(privacyPolicySource, /mensagens oficiais editadas ou excluídas/);
+assert.match(privacyPolicySource, /favoritos, atalhos usados/);
+assert.match(privacyPolicySource, /até 20 versões anteriores do catálogo/);
+assert.match(privacyPolicySource, /Backup completo/);
+assert.match(privacyPolicySource, /arquivo JSON/);
+assert.match(privacyPolicySource, /Dados temporários do/);
+assert.match(privacyPolicySource, /não aceita chaves que/);
 assert.match(privacyPolicySource, /Central de Notificações ou na tela bloqueada/);
 assert.doesNotMatch(privacyPolicySource, /devem ser substituídos pelas informações reais/);
 assert.match(catalogSource, /id:\s*"way-mensagens"/);
-assert.match(catalogSource, /id:\s*"way-mensagens"[\s\S]*?version:\s*"3\.7"/);
+assert.match(catalogSource, /id:\s*"way-mensagens"[\s\S]*?version:\s*"3\.10"/);
 assert.match(catalogSource, /id:\s*"way-erp-copiar-dados"/);
 assert.match(catalogSource, /version:\s*"1\.6"/);
 assert.match(catalogSource, /id:\s*"way-erp-gerador-relato"/);
 assert.match(catalogSource, /name:\s*"ERP — Gerador de Relato"/);
+assert.match(catalogSource, /id:\s*"way-erp-gerador-relato"[\s\S]*?version:\s*"1\.13"/);
 assert.match(catalogSource, /id:\s*"way-interface-compacta"/);
 assert.match(catalogSource, /name:\s*"ERP — Interface Compacta"/);
 assert.match(catalogSource, /id:\s*"way-erp-temas"/);
@@ -205,8 +363,8 @@ assert.equal(
 );
 assert.equal(
   catalogContext.WAY_TOOLS_SCRIPTS.find((script) => script.id === "matrix-temas").defaultEnabled,
-  false,
-  "Matrix — Tema Claro/Escuro precisa iniciar desativado por padrão."
+  true,
+  "Matrix — Tema Claro/Escuro precisa iniciar ativado por padrão."
 );
 assert.equal(
   catalogContext.WAY_TOOLS_SCRIPTS.find((script) => script.id === "matrix-corrigir-colagem").defaultEnabled,
@@ -219,9 +377,27 @@ assert.match(popupSource, /script-badge/);
 assert.match(runtimeSource, /chrome\.storage\.onChanged\.addListener\(listener\)/);
 assert.match(runtimeSource, /snapshot\[namespacedKey\]\s*=\s*change\.newValue/);
 assert.match(scriptSource, /WayToolsRuntime\.run\("way-mensagens"/);
+assert.deepEqual(chatwootRuntimeEntry.css, ["styles/way-mensagens.css"]);
+assert.match(scriptSource, /--way-autocomplete-max-height/);
+assert.match(wayMessagesStyleSource, /var\(--way-autocomplete-max-height, 320px\)/);
+assert.match(wayMessagesStyleSource, /\.way-msg-modal/);
 assert.match(scriptSource, /const GM_getValue = storage\.getValue/);
 assert.match(scriptSource, /const GM_setValue = storage\.setValue/);
-assert.match(scriptSource, /\[Way Mensagens\] v3\.7 ativa\./);
+assert.match(scriptSource, /\[Way Mensagens\] v3\.10 ativa\./);
+assert.match(scriptSource, /Perfil ativo:/);
+assert.match(scriptSource, /function obterExperienciaMensagens\(/);
+assert.match(scriptSource, /function abrirPreviewMensagemAutocomplete\(/);
+assert.match(scriptSource, /function abrirSeletorGeneroMensagem\(/);
+assert.match(scriptSource, /data-way-genero/);
+assert.match(scriptSource, /resolverVariacaoGenero/);
+assert.match(wayMessagesStyleSource, /\.way-gender-options/);
+assert.match(scriptSource, /function abrirOrganizadorCategorias\(/);
+assert.match(scriptSource, /way-msg-undo/);
+assert.match(scriptSource, /way-msg-duplicate/);
+assert.match(scriptSource, /data-way-favorite/);
+assert.match(scriptSource, /name="sinonimos"/);
+assert.match(scriptSource, /name="palavrasChave"/);
+assert.match(scriptSource, /wayTools:getDiagnostics/);
 assert.match(scriptSource, /function monitorarNovasMensagens\(/);
 assert.match(scriptSource, /function monitorarNotificacaoInatividade\(/);
 assert.match(scriptSource, /function abaConversasMinhasEstaAtiva\(/);
@@ -242,12 +418,18 @@ assert.match(scriptSource, /vermelho:\s*10/);
 assert.match(scriptSource, /notificarAmarelo:\s*true/);
 assert.match(scriptSource, /notificarLaranja:\s*true/);
 assert.match(scriptSource, /notificarVermelho:\s*true/);
+assert.match(scriptSource, /somenteUltimaMensagemAgente:\s*true/);
+assert.match(scriptSource, /alertaVisualSomenteUltimaMensagemAgente:\s*false/);
 assert.match(scriptSource, /padrao\.notificarAmarelo/);
 assert.match(scriptSource, /padrao\.notificarLaranja/);
 assert.match(scriptSource, /padrao\.notificarVermelho/);
 assert.match(scriptSource, /name="notificarAmarelo"/);
 assert.match(scriptSource, /name="notificarLaranja"/);
 assert.match(scriptSource, /name="notificarVermelho"/);
+assert.match(scriptSource, /name="somenteUltimaMensagemAgente"/);
+assert.match(scriptSource, /Notificar somente após mensagem do agente/);
+assert.match(scriptSource, /name="alertaVisualSomenteUltimaMensagemAgente"/);
+assert.match(scriptSource, /Alertas visuais somente após mensagem do agente/);
 assert.match(scriptSource, /atendimento sem nova atividade há/);
 assert.match(scriptSource, /\|inatividade\|\$\{nivel\}\|/);
 assert.match(scriptSource, /function atualizarTituloMensagensNaoLidas\(/);
@@ -265,6 +447,10 @@ assert.doesNotMatch(scriptSource, /return '\*AMANHÃ\*';/);
 assert.match(scriptSource, /wayTools:iaMessageNotification/);
 assert.match(scriptSource, /wayTools:syncChatwootInactivity/);
 assert.match(scriptSource, /wayTools:cancelChatwootInactivity/);
+assert.match(scriptSource, /wayTools:reconcileChatwootInactivity/);
+assert.match(scriptSource, /function erroIndicaContextoInvalidado\(/);
+assert.match(scriptSource, /function invalidarContextoExtensao\(/);
+assert.match(scriptSource, /O Way Tools foi atualizado\. Recarregue esta página/);
 assert.match(scriptSource, /iniciarMonitorRealtimeChatWoot/);
 assert.match(scriptSource, /ESTADO_CHATWOOT_REALTIME/);
 assert.match(scriptSource, /function obterAccountIdPelaUrlAtual\(/);
@@ -394,10 +580,48 @@ assert.equal(bridgeRealtimeMessage?.message.payload.event, "message.created");
 assert.equal(bridgeRealtimeMessage?.message.payload.conversationId, 4504);
 assert.equal(bridgeRealtimeMessage?.message.payload.assigneeId, 78);
 assert.equal(bridgeRealtimeMessage?.message.payload.customerName, "Cliente Teste");
+assert.equal(bridgeRealtimeMessage?.message.payload.lastMessageFromAgent, false);
 assert.equal(
   bridgeRealtimeMessage?.message.payload.url,
   "https://ia-nocodb.internetway.com.br/app/accounts/2/conversations/4504"
 );
+
+bridgeSocket.emit("message", JSON.stringify({
+  identifier: JSON.stringify({
+    channel: "RoomChannel",
+    account_id: 2,
+    user_id: 78
+  }),
+  message: {
+    event: "message.created",
+    data: {
+      id: 119783,
+      account_id: 2,
+      conversation_id: 4504,
+      message_type: 1,
+      sender_type: "User",
+      private: false,
+      content: "Orientação enviada pelo atendente",
+      created_at: 1_790_879_170,
+      conversation: {
+        assignee_id: 78,
+        unread_count: 0,
+        last_activity_at: 1_790_879_170
+      },
+      sender: {
+        id: 78,
+        name: "Atendente Teste",
+        type: "user"
+      }
+    }
+  }
+}));
+const bridgeOutgoingMessage = [...bridgePostedMessages].reverse().find(
+  ({ message }) =>
+    message.type === "event" &&
+    message.payload?.messageId === 119783
+);
+assert.equal(bridgeOutgoingMessage?.message.payload.lastMessageFromAgent, true);
 
 bridgeSocket.emit("message", JSON.stringify({
   identifier: JSON.stringify({
@@ -446,6 +670,38 @@ for (const forbiddenValue of [
     "A ponte em tempo real só pode publicar os campos operacionais sanitizados."
   );
 }
+
+const legacyBridgeMessages = [];
+const legacyBridgeAttributes = new Map();
+const legacyBridgeContext = {
+  document: {
+    documentElement: {
+      setAttribute: (name, value) => legacyBridgeAttributes.set(name, value)
+    }
+  },
+  window: {
+    WebSocket: function WayToolsWebSocket() {},
+    postMessage: (message, targetOrigin) => {
+      legacyBridgeMessages.push({ message, targetOrigin });
+    }
+  }
+};
+vm.createContext(legacyBridgeContext);
+vm.runInContext(chatwootRealtimeBridgeSource, legacyBridgeContext);
+assert.ok(
+  legacyBridgeMessages.some(({ message }) => message.type === "legacy-duplicate"),
+  "A versão nova precisa reconhecer uma ponte legada já instalada."
+);
+assert.equal(
+  legacyBridgeAttributes.get("data-way-tools-legacy-duplicate"),
+  "true",
+  "O diagnóstico legado precisa sobreviver quando o aviso ocorrer antes do listener isolado."
+);
+assert.equal(
+  legacyBridgeContext.window.WebSocket.name,
+  "WayToolsWebSocket",
+  "A ponte nova não deve empilhar outro interceptador sobre a versão legada."
+);
 assert.match(scriptSource, /ultimaMensagemFoiDoAtendente/);
 assert.match(scriptSource, /\.right-bubble/);
 assert.match(scriptSource, /\.left-bubble/);
@@ -469,6 +725,13 @@ assert.match(backgroundServiceWorkerSource, /title:\s*customerName/);
 assert.doesNotMatch(backgroundServiceWorkerSource, /title:\s*`Nova mensagem/);
 assert.doesNotMatch(backgroundServiceWorkerSource, /contextMessage:/);
 assert.match(backgroundServiceWorkerSource, /chrome\.notifications\.onClicked/);
+assert.match(backgroundServiceWorkerSource, /wayTools:setChatwootNotificationOwner/);
+assert.match(backgroundServiceWorkerSource, /async function clearNotificationArtifactsForThisInstallation\(/);
+assert.match(backgroundServiceWorkerSource, /reason:\s*"duplicate-installation"/);
+assert.match(instanceCoordinatorSource, /nmoechoifhbibhbekfdphmfipeamjged/);
+assert.match(instanceCoordinatorSource, /data-way-tools-extension-instance/);
+assert.match(scriptSource, /Outra instalação do Way Tools foi detectada/);
+assert.match(scriptSource, /function iniciarCoordenacaoNotificacoes\(/);
 assert.match(scriptSource, /wayTools\.notifications\.whenFocused/);
 assert.match(scriptSource, /notificarEmPrimeiroPlano:\s*false/);
 assert.match(scriptSource, /!PREFERENCIAS_NOTIFICACOES[\s\S]*?\.notificarEmPrimeiroPlano\s*&&[\s\S]*?paginaChatWootEstaEmUso\(\)/);
@@ -480,6 +743,34 @@ assert.ok(
 const notificationPolicyContext = {};
 vm.runInNewContext(messageNotificationPolicySource, notificationPolicyContext);
 const notificationPolicy = notificationPolicyContext.WayToolsMessageNotificationPolicy;
+
+const instanceCoordinatorContext = {
+  chrome: {
+    runtime: {
+      id: "devwaytoolsaaaaaaaaaaaaaaaaaaaa",
+      getManifest: () => ({ version: "0.7.0" })
+    }
+  }
+};
+vm.createContext(instanceCoordinatorContext);
+vm.runInContext(instanceCoordinatorSource, instanceCoordinatorContext);
+const instanceCoordinator = instanceCoordinatorContext.WayToolsInstanceCoordinator;
+assert.equal(
+  instanceCoordinator.chooseOwner([
+    { extensionId: "devwaytoolsaaaaaaaaaaaaaaaaaaaa", version: "9.9.9" },
+    { extensionId: "nmoechoifhbibhbekfdphmfipeamjged", version: "0.6.2" }
+  ]).extensionId,
+  "nmoechoifhbibhbekfdphmfipeamjged",
+  "A instalação oficial deve ter prioridade mesmo quando a cópia manual é mais nova."
+);
+assert.equal(
+  instanceCoordinator.chooseOwner([
+    { extensionId: "devwaytoolsaaaaaaaaaaaaaaaaaaaa", version: "0.7.0" },
+    { extensionId: "otherwaytoolsbbbbbbbbbbbbbbbbbb", version: "0.7.1" }
+  ]).version,
+  "0.7.1",
+  "Sem a instalação oficial, a versão mais recente deve assumir as notificações."
+);
 assert.equal(notificationPolicy.isCurrentActivityLabel(" now "), true);
 assert.equal(notificationPolicy.isCurrentActivityLabel("agora"), true);
 assert.equal(notificationPolicy.isCurrentActivityLabel("1m"), false);
@@ -647,10 +938,20 @@ const backgroundContext = {
       }
     },
     alarms: {
-      clear: async () => true,
+      clear: async (name) => {
+        const index = scheduledNotificationAlarms.findIndex((alarm) => alarm.name === name);
+
+        if (index < 0) {
+          return false;
+        }
+
+        scheduledNotificationAlarms.splice(index, 1);
+        return true;
+      },
       create: async (name, options) => {
         scheduledNotificationAlarms.push({ name, options });
       },
+      getAll: async () => scheduledNotificationAlarms.map((alarm) => ({ ...alarm })),
       onAlarm: {
         addListener: (listener) => backgroundAlarmListeners.push(listener)
       }
@@ -871,13 +1172,15 @@ const inactivityRequest = {
     customerName: "Cliente Inatividade",
     preview: "Mensagem anterior",
     url: "https://ia-nocodb.internetway.com.br/app/accounts/2/inbox-view/conversation/2468",
-    lastActivityAt: Date.now() - 121_000
+    lastActivityAt: Date.now() - 121_000,
+    lastMessageFromAgent: true
   },
   levels: {
     yellow: { minutes: 2, enabled: true },
     orange: { minutes: 5, enabled: true },
     red: { minutes: 10, enabled: true }
   },
+  requireAgentLastMessage: true,
   suppressPastLevels: false
 };
 const inactivitySyncResponse = await new Promise((resolvePromise) => {
@@ -903,6 +1206,55 @@ await new Promise((resolvePromise) => setTimeout(resolvePromise, 0));
 assert.equal(createdNotifications.length, notificationsBeforeInactivity + 1);
 assert.equal(createdNotifications.at(-1).options.title, "Cliente Inatividade");
 assert.match(createdNotifications.at(-1).options.message, /2 minutos/);
+
+const customerLastMessageRequest = {
+  ...inactivityRequest,
+  conversation: {
+    ...inactivityRequest.conversation,
+    conversationId: 2470,
+    lastMessageFromAgent: false
+  }
+};
+const customerLastMessageResponse = await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0](customerLastMessageRequest, trustedSender, resolvePromise);
+});
+assert.equal(customerLastMessageResponse.ok, true);
+assert.equal(customerLastMessageResponse.scheduled, false);
+assert.equal(customerLastMessageResponse.reason, "last-message-not-from-agent");
+assert.equal(
+  sessionStorage["wayTools.chatwootInactivityState.2.2470"],
+  undefined,
+  "A última mensagem do cliente não pode manter alertas de inatividade agendados."
+);
+
+const staleInactivityRequest = {
+  ...inactivityRequest,
+  conversation: {
+    ...inactivityRequest.conversation,
+    conversationId: 2471
+  }
+};
+await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0](staleInactivityRequest, trustedSender, resolvePromise);
+});
+const inactivityReconcileResponse = await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0]({
+    type: "wayTools:reconcileChatwootInactivity",
+    accountId: 2,
+    conversationIds: [2468]
+  }, trustedSender, resolvePromise);
+});
+assert.equal(inactivityReconcileResponse.ok, true);
+assert.equal(inactivityReconcileResponse.removed, 1);
+assert.ok(
+  sessionStorage["wayTools.chatwootInactivityState.2.2468"],
+  "A reconciliação deve preservar conversas que continuam atribuídas."
+);
+assert.equal(
+  sessionStorage["wayTools.chatwootInactivityState.2.2471"],
+  undefined,
+  "A reconciliação deve remover alertas de conversas que não estão mais atribuídas."
+);
 
 notificationWindowFocused = true;
 queriedNotificationTabs = [{
@@ -989,9 +1341,63 @@ assert.equal(
   trustedSender.url,
   "Destinos externos devem ser substituídos pela página confiável do ChatWoot."
 );
+
+notificationTabExists = true;
+const duplicateGuardNotification = await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0]({
+    ...notificationRequest,
+    conversationKey: "conversation:duplicate-guard",
+    fingerprint: `${notificationRequest.fingerprint}|duplicate-guard`
+  }, trustedSender, resolvePromise);
+});
+await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0]({
+    ...inactivityRequest,
+    conversation: {
+      ...inactivityRequest.conversation,
+      conversationId: 2480
+    }
+  }, trustedSender, resolvePromise);
+});
+assert.ok(activeNotifications[duplicateGuardNotification.notificationId]);
+assert.ok(sessionStorage["wayTools.chatwootInactivityState.2.2480"]);
+
+const duplicateOwnerDisabledResponse = await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0]({
+    type: "wayTools:setChatwootNotificationOwner",
+    enabled: false
+  }, trustedSender, resolvePromise);
+});
+assert.equal(duplicateOwnerDisabledResponse.ok, true);
+assert.equal(duplicateOwnerDisabledResponse.enabled, false);
+assert.equal(sessionStorage["wayTools.chatwootNotificationOwner.enabled"], false);
+assert.equal(activeNotifications[duplicateGuardNotification.notificationId], undefined);
+assert.equal(sessionStorage["wayTools.chatwootInactivityState.2.2480"], undefined);
+
+const suppressedDuplicateNotification = await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0]({
+    ...notificationRequest,
+    conversationKey: "conversation:suppressed-duplicate",
+    fingerprint: `${notificationRequest.fingerprint}|suppressed-duplicate`
+  }, trustedSender, resolvePromise);
+});
+assert.equal(suppressedDuplicateNotification.suppressed, true);
+assert.equal(suppressedDuplicateNotification.reason, "duplicate-installation");
+
+const duplicateOwnerEnabledResponse = await new Promise((resolvePromise) => {
+  backgroundMessageListeners[0]({
+    type: "wayTools:setChatwootNotificationOwner",
+    enabled: true
+  }, trustedSender, resolvePromise);
+});
+assert.equal(duplicateOwnerEnabledResponse.ok, true);
+assert.equal(duplicateOwnerEnabledResponse.enabled, true);
 assert.doesNotMatch(backgroundServiceWorkerSource, /IA_NOCO_DB_ORIGIN/);
 assert.match(backgroundServiceWorkerSource, /function isAllowedDestination\(/);
-assert.match(scriptSource, /function obterMensagensNativas\(\)/);
+assert.match(backgroundServiceWorkerSource, /function migrateLegacyMessageCatalog\(/);
+assert.match(backgroundServiceWorkerSource, /wayTools\.shared\.messages\.catalog\.n2\.v1/);
+assert.match(backgroundServiceWorkerSource, /wayTools\.shared\.messages\.catalog\.v1/);
+assert.match(scriptSource, /function obterMensagensNativas\(/);
 assert.match(scriptSource, /GM_getValue\(\s*CONFIG\.storageKey,\s*null\s*\)/);
 const defaultVisitTemplate = scriptSource.match(
   /const TEMPLATE_VISITA_PADRAO\s*=\s*`([\s\S]*?)`;/
@@ -1004,7 +1410,72 @@ assert.doesNotMatch(
 );
 
 const nativeMessages = loadNativeMessages();
-assert.equal(nativeMessages.length, 16, "O catálogo nativo precisa conter as 16 mensagens do backup.");
+const nativeMessageCatalog = loadNativeMessageCatalog();
+assert.equal(nativeMessageCatalog.schemaVersion, 2, "O catálogo nativo precisa usar o schema 2.");
+assert.equal(nativeMessageCatalog.profiles.n2.version, 4);
+assert.equal(nativeMessageCatalog.profiles.sac.version, 3);
+assert.equal(nativeMessageCatalog.profiles.sac.messages.length, 2, "O SAC deve conter os comandos oficiais já aprovados.");
+assert.ok(
+  nativeMessageCatalog.categories.some((category) =>
+    category.id === "financeiro" && category.setores.includes("sac")
+  ),
+  "As categorias do SAC precisam vir da fonte central."
+);
+assert.ok(
+  nativeMessageCatalog.categories.some((category) =>
+    category.id === "ajustes" && category.setores.includes("n2") && !category.setores.includes("sac")
+  ),
+  "As categorias devem poder ser limitadas por setor."
+);
+const plannedSacCommands = sacDraft.categories.flatMap((category) => category.commands || []);
+assert.equal(plannedSacCommands.length, 42, "O estúdio precisa carregar os 42 comandos planejados para o SAC.");
+assert.equal(
+  plannedSacCommands.filter((command) => command.firstPackage === true).length,
+  12,
+  "O primeiro pacote SAC precisa manter suas 12 mensagens prioritárias."
+);
+assert.equal(
+  new Set(plannedSacCommands.map((command) => command.command)).size,
+  plannedSacCommands.length,
+  "A proposta SAC não pode conter comandos duplicados."
+);
+for (const command of plannedSacCommands) {
+  assert.ok(
+    nativeMessageCatalog.categories.some((category) =>
+      category.id === command.targetCategory && category.setores.includes("sac")
+    ),
+    `O comando SAC !${command.command} precisa apontar para uma categoria central disponível.`
+  );
+}
+assert.equal(nativeMessages.length, 18, "O catálogo N2 precisa conter as 16 mensagens do backup e os dois novos comandos oficiais.");
+const n2ImageMessage = nativeMessages.find((message) => message.comando === "enviarimagem");
+const sacImageMessage = nativeMessageCatalog.profiles.sac.messages.find((message) => message.comando === "enviarimagem");
+for (const imageMessage of [n2ImageMessage, sacImageMessage]) {
+  assert.ok(imageMessage, "N2 e SAC precisam oferecer o comando !enviarimagem.");
+  assert.equal(imageMessage.categoria, "orientacoes");
+  assert.equal(imageMessage.tipo, "imagem");
+  assert.equal(imageMessage.arquivoImagem, "assets/mensagens/enviarimagem.png");
+}
+const expectedOccurrenceText = "Identificamos uma ocorrência na região e já temos uma equipe técnica atuando para realizar a correção.\n\nA previsão é que a situação seja normalizada em até 4 horas.\n\nAgradecemos pela compreensão durante esse período.";
+for (const occurrenceMessage of [
+  nativeMessages.find((message) => message.comando === "ocorrencia"),
+  nativeMessageCatalog.profiles.sac.messages.find((message) => message.comando === "ocorrencia")
+]) {
+  assert.ok(occurrenceMessage, "N2 e SAC precisam oferecer o comando !ocorrencia.");
+  assert.equal(occurrenceMessage.categoria, "orientacoes");
+  assert.equal(occurrenceMessage.tipo, "texto");
+  assert.equal(occurrenceMessage.mensagem, expectedOccurrenceText);
+}
+const thanksMessage = nativeMessages.find((message) => message.comando === "agradecimento");
+assert.ok(thanksMessage, "O catálogo N2 precisa manter o comando !agradecimento.");
+assert.equal(thanksMessage.variacaoHorario, true);
+for (const period of ["manha", "tarde", "noite"]) {
+  assert.match(
+    thanksMessage[period],
+    /\{\{genero:ajudá-lo\|ajudá-la\}\}/,
+    `A versão de ${period} do !agradecimento precisa oferecer masculino e feminino.`
+  );
+}
 assert.equal(new Set(nativeMessages.map((message) => message.id)).size, nativeMessages.length, "Os IDs das mensagens nativas precisam ser únicos.");
 assert.equal(new Set(nativeMessages.map((message) => message.comando)).size, nativeMessages.length, "Os comandos das mensagens nativas precisam ser únicos.");
 const nativeMessagesText = JSON.stringify(nativeMessages);
@@ -1028,6 +1499,127 @@ assert.deepEqual(
   "O módulo carregado precisa preservar exatamente as mensagens do JSON."
 );
 assert.ok(Object.isFrozen(nativeContext.WAY_TOOLS_NATIVE_MESSAGES), "O catálogo nativo precisa ser imutável.");
+assert.ok(Object.isFrozen(nativeContext.WAY_TOOLS_MESSAGE_CATALOG), "A definição completa dos catálogos precisa ser imutável.");
+assert.deepEqual(
+  JSON.parse(JSON.stringify(nativeContext.WAY_TOOLS_NATIVE_CATALOGS.sac.messages)),
+  nativeMessageCatalog.profiles.sac.messages,
+  "O módulo gerado precisa expor o perfil SAC separadamente."
+);
+
+const messageCatalogContext = {};
+vm.runInNewContext(nativeMessagesSource, messageCatalogContext);
+vm.runInNewContext(messageCatalogManagerSource, messageCatalogContext);
+vm.runInNewContext(messageExperienceSource, messageCatalogContext);
+const messageCatalogManager = messageCatalogContext.WayToolsMessageCatalogs;
+assert.ok(messageCatalogManager, "O gerenciador compartilhado de catálogos precisa ser carregado.");
+for (const method of [
+  "searchMessages",
+  "experienceWithStorage",
+  "toggleFavoriteWithStorage",
+  "recordUseWithStorage",
+  "recordHistoryWithStorage",
+  "consumeUndoWithStorage",
+  "moveCategoryWithStorage",
+  "moveMessageWithStorage",
+  "unresolvedTags"
+]) {
+  assert.equal(typeof messageCatalogManager[method], "function", `O gerenciador precisa expor ${method}.`);
+}
+assert.deepEqual(
+  JSON.parse(JSON.stringify(Object.keys(messageCatalogManager.categoryMap("n2")))),
+  nativeMessageCatalog.categories
+    .filter((category) => category.setores.includes("n2"))
+    .sort((left, right) => left.ordem - right.ordem)
+    .map((category) => category.id)
+);
+assert.ok(messageCatalogManager.categoryMap("sac").financeiro);
+assert.equal(messageCatalogManager.categoryMap("sac").ajustes, undefined);
+
+const migratedCatalog = JSON.parse(JSON.stringify(nativeMessages));
+migratedCatalog[0].mensagem = "Mensagem personalizada pelo usuário.";
+const removedNativeId = migratedCatalog[1].id;
+migratedCatalog.splice(1, 1);
+migratedCatalog.push({
+  id: "custom-sac-safe",
+  comando: "personalizado",
+  categoria: "abertura",
+  tipo: "texto",
+  variacaoHorario: false,
+  mensagem: "Mensagem criada pelo usuário.",
+  manha: "",
+  tarde: "",
+  noite: "",
+  templateVisita: ""
+});
+const migratedResult = messageCatalogManager.resolve("n2", migratedCatalog, null);
+assert.equal(migratedResult.messages[0].mensagem, "Mensagem personalizada pelo usuário.");
+assert.ok(!migratedResult.messages.some((message) => message.id === removedNativeId));
+assert.ok(migratedResult.messages.some((message) => message.id === "custom-sac-safe"));
+assert.ok(migratedResult.state.deletedNativeIds.includes(removedNativeId));
+
+const savedState = messageCatalogManager.deriveSavedState("n2", migratedCatalog, migratedResult.state);
+const initialSacState = messageCatalogManager.resolve("sac", [], null).state;
+const futureCatalog = JSON.parse(JSON.stringify(nativeMessageCatalog));
+futureCatalog.profiles.n2.version = 2;
+futureCatalog.profiles.n2.messages[0].mensagem = "Nova redação oficial que não deve substituir a personalização.";
+futureCatalog.profiles.n2.messages.push({
+  id: "native-future-n2",
+  comando: "novidadeoficial",
+  categoria: "abertura",
+  tipo: "texto",
+  variacaoHorario: false,
+  mensagem: "Nova mensagem oficial.",
+  manha: "",
+  tarde: "",
+  noite: "",
+  templateVisita: ""
+});
+futureCatalog.profiles.sac.version = 2;
+futureCatalog.profiles.sac.messages.push({
+  id: "native-first-sac",
+  comando: "aberturasac",
+  categoria: "abertura",
+  tipo: "texto",
+  variacaoHorario: false,
+  mensagem: "Primeira mensagem oficial do SAC.",
+  manha: "",
+  tarde: "",
+  noite: "",
+  templateVisita: ""
+});
+const futureMessageCatalogContext = {
+  WAY_TOOLS_MESSAGE_CATALOG: futureCatalog
+};
+vm.runInNewContext(messageCatalogManagerSource, futureMessageCatalogContext);
+const futureManager = futureMessageCatalogContext.WayToolsMessageCatalogs;
+const futureN2Messages = futureManager.materialize("n2", savedState);
+assert.equal(futureN2Messages.find((message) => message.id === nativeMessages[0].id).mensagem, "Mensagem personalizada pelo usuário.");
+assert.ok(!futureN2Messages.some((message) => message.id === removedNativeId));
+assert.ok(futureN2Messages.some((message) => message.id === "custom-sac-safe"));
+assert.ok(futureN2Messages.some((message) => message.id === "native-future-n2"));
+assert.ok(
+  futureManager.materialize("sac", initialSacState)
+    .some((message) => message.id === "native-first-sac"),
+  "Uma atualização precisa acrescentar novas mensagens oficiais ao SAC já inicializado."
+);
+const sacCustomCollisionState = messageCatalogManager.deriveSavedState("sac", [{
+  id: "native-first-sac",
+  comando: "atalhopessoal",
+  categoria: "abertura",
+  tipo: "texto",
+  variacaoHorario: false,
+  mensagem: "Conteúdo pessoal anterior ao pacote oficial.",
+  manha: "",
+  tarde: "",
+  noite: "",
+  templateVisita: ""
+}], null);
+assert.equal(
+  futureManager.materialize("sac", sacCustomCollisionState)
+    .find((message) => message.id === "native-first-sac")?.comando,
+  "atalhopessoal",
+  "Uma mensagem pessoal precisa vencer até mesmo uma futura colisão de ID nativo."
+);
 
 assert.match(erpScriptSource, /WayToolsRuntime\.run\("way-erp-copiar-dados"/);
 assert.match(erpScriptSource, /\[Way ERP\] Copiar Dados v1\.6 ativo\./);
@@ -1081,7 +1673,14 @@ assert.match(matrixMessagesSource, /"\.contato-cpf"/);
 assert.match(matrixMessagesSource, /"\.atendimento-protocolo"/);
 assert.match(matrixMessagesSource, /chrome\.runtime\.getURL\("128\.png"\)/);
 assert.match(matrixMessagesSource, /function showAutocomplete\(/);
-assert.match(matrixMessagesSource, /const CATEGORY_LABELS = Object\.freeze\(/);
+assert.match(matrixMessagesSource, /function positionAutocomplete\(/);
+assert.match(matrixMessagesSource, /window\.visualViewport/);
+assert.match(matrixMessagesSource, /availableAbove >= naturalHeight \|\| availableAbove > availableBelow/);
+assert.match(matrixMessagesSource, /viewportBottom - margin - height/);
+assert.match(matrixMessagesSource, /MESSAGE_CATALOG_MANAGER = globalThis\.WayToolsMessageCatalogs/);
+assert.match(matrixMessagesSource, /function categoryLabelsForSector\(/);
+assert.match(matrixMessagesSource, /typeof definition === "string"/);
+assert.match(matrixMessagesSource, /normalizeText\(definition\?\.label\) \|\| id/);
 assert.match(matrixMessagesSource, /function getCategories\(/);
 assert.match(matrixMessagesSource, /function showCategories\(/);
 assert.match(matrixMessagesSource, /function openCategory\(/);
@@ -1099,6 +1698,17 @@ assert.match(matrixMessagesSource, /Enter inserir sem enviar/);
 assert.match(matrixMessagesSource, /function openConfig\(/);
 assert.match(matrixMessagesSource, /function openAvailability\(/);
 assert.match(matrixMessagesSource, /function openVisit\(/);
+assert.match(matrixMessagesSource, /function openMessagePreview\(/);
+assert.match(matrixMessagesSource, /function openGenderSelector\(/);
+assert.match(matrixMessagesSource, /data-way-gender/);
+assert.match(matrixMessagesSource, /resolveGenderVariant/);
+assert.match(matrixMessagesSource, /Perfil ativo:/);
+assert.match(matrixMessagesSource, /data-way-favorite/);
+assert.match(matrixMessagesSource, /data-way-duplicate/);
+assert.match(matrixMessagesSource, /data-way-undo/);
+assert.match(matrixMessagesSource, /data-way-order-categories/);
+assert.match(matrixMessagesSource, /name="sinonimos"/);
+assert.match(matrixMessagesSource, /name="palavrasChave"/);
 assert.match(matrixMessagesSource, /Exportar JSON/);
 assert.match(matrixMessagesSource, /Importar JSON/);
 assert.doesNotMatch(matrixMessagesSource, /ia-nocodb|ProseMirror|conversation-panel/i);
@@ -1106,6 +1716,10 @@ assert.match(scriptSource, /const ENTER_COMANDO_BLOQUEADO\s*=\s*new WeakMap\(\)/
 assert.match(scriptSource, /function bloquearContinuacaoEnterComando\(/);
 assert.match(scriptSource, /event\.stopImmediatePropagation\(\)/);
 assert.match(scriptSource, /inserir sem enviar/);
+assert.match(scriptSource, /function posicionarAutocomplete\(/);
+assert.match(scriptSource, /window\.visualViewport/);
+assert.match(scriptSource, /espacoAcima >= alturaNatural \|\|/);
+assert.match(scriptSource, /viewportBottom - margem - altura/);
 assert.match(matrixInterfaceSource, /WayToolsRuntime\.run\("matrix-interface-compacta"/);
 assert.match(matrixInterfaceSource, /registerMenuCommand\("matrix-interface-compacta"/);
 assert.match(matrixInterfaceSource, /@match\s+https:\/\/wayinternet\.matrixdobrasil\.ai\/\*/);
@@ -1168,6 +1782,12 @@ assert.match(popupHtmlSource, /id="correction-form"/);
 assert.match(popupHtmlSource, /id="ignored-form"/);
 assert.match(popupHtmlSource, /id="notification-duration"/);
 assert.match(popupHtmlSource, /id="notification-when-focused"/);
+assert.match(popupHtmlSource, /id="sector-onboarding"/);
+assert.match(popupHtmlSource, /id="confirm-initial-sector"/);
+assert.match(popupHtmlSource, /id="message-sector"/);
+assert.match(popupHtmlSource, /config\/default-messages\.js/);
+assert.match(popupSource, /function renderDiagnostics\(/);
+assert.match(popupDiagnosticsSource, /wayTools:getDiagnostics/);
 for (const duration of ["disabled", "windows", "1", "2", "5", "10", "30", "60", "persistent"]) {
   assert.match(
     popupHtmlSource,
@@ -1179,6 +1799,27 @@ assert.match(popupSource, /wayTools\.notifications\.duration/);
 assert.match(popupSource, /notificationDurationDefault\s*=\s*"5"/);
 assert.match(popupSource, /wayTools\.notifications\.whenFocused/);
 assert.match(popupSource, /notificationWhenFocusedDefault\s*=\s*false/);
+assert.match(popupSource, /wayTools\.shared\.messages\.sector\.v1/);
+assert.match(popupSource, /wayTools\.preferences\.messageSector\.v1/);
+assert.match(popupSource, /function validMessageSector\(/);
+assert.match(popupSource, /function persistMessageSectorPreference\(/);
+assert.match(popupSource, /function loadPersistedMessageSector\(/);
+assert.match(popupSource, /chrome\.storage\.sync\.get\(messageSectorPreferenceStorageKey\)/);
+assert.match(popupSource, /chrome\.storage\.sync\.set/);
+assert.match(popupSource, /const selectedSector = await loadPersistedMessageSector\(\)/);
+assert.match(
+  popupSource,
+  /\[messageSectorStorageKey\]: normalizedSector,[\s\S]*\[messageSectorPreferenceStorageKey\]: normalizedSector/,
+  "A seleção de perfil precisa atualizar a chave usada pelos scripts e a preferência resiliente."
+);
+assert.match(popupSource, /wayTools\.shared\.messages\.catalog\.n2\.v1/);
+assert.match(popupSource, /wayTools\.shared\.messages\.catalog\.sac\.v1/);
+assert.match(popupSource, /wayTools\.data\.way-mensagens\.way-mensagens-personalizadas-v1/);
+assert.match(popupSource, /wayTools\.data\.matrix-mensagens\.way-matrix-mensagens-personalizadas-v1/);
+assert.match(popupSource, /function ensureMessageCatalogProfiles\(/);
+assert.match(popupSource, /updates\[messageCatalogStorageKeys\.sac\]\s*=\s*cloneNativeMessages\("sac"\)/);
+assert.match(popupSource, /WayToolsMessageCatalogs\.ensureWithChromeStorage\("n2"\)/);
+assert.match(popupSource, /WayToolsMessageCatalogs\.ensureWithChromeStorage\("sac"\)/);
 assert.doesNotMatch(popupSource, /Recarregue a página do sistema/);
 assert.match(spellingScriptSource, /storage\.onValueChanged\?\.\(/);
 assert.match(spellingScriptSource, /function atualizarDicionarioPessoal\(/);
@@ -1328,14 +1969,299 @@ assert.ok(!erpEntries[0].js.some((file) => /matrix/i.test(file)));
 
 assert.match(erpReportGeneratorSource, /WayToolsRuntime\.run\("way-erp-gerador-relato"/);
 assert.match(erpReportGeneratorSource, /\.dx-htmleditor \.ql-editor\.dx-htmleditor-content\[contenteditable="true"\]/);
-assert.match(erpReportGeneratorSource, /const PRODUCTS = Object\.freeze\(/);
-assert.match(erpReportGeneratorSource, /const CHECKS = Object\.freeze\(/);
-assert.match(erpReportGeneratorSource, /const ACTIONS = Object\.freeze\(/);
-assert.match(erpReportGeneratorSource, /const VISIT_REASONS = Object\.freeze\(/);
-assert.match(erpReportGeneratorSource, /const OUTCOME_VALIDATION = Object\.freeze\(/);
+assert.match(erpReportGeneratorSource, /let PRODUCTS = Object\.freeze\(/);
+assert.match(erpReportGeneratorSource, /let CHECKS = Object\.freeze\(/);
+assert.match(erpReportGeneratorSource, /let ACTIONS = Object\.freeze\(/);
+assert.match(erpReportGeneratorSource, /let VISIT_REASONS = Object\.freeze\(/);
+assert.match(erpReportGeneratorSource, /const NO_INTERACTION_CONTACT = "Chat sem interação"/);
+assert.match(erpReportGeneratorSource, /value:\s*"",\s*label:\s*"Sem interação"/);
+assert.match(erpReportGeneratorSource, /selectOptions\(NO_INTERACTION_OPTIONS\.attempts, ""\)/);
+assert.match(erpReportGeneratorSource, /\.map\(normalizeText\)\.filter\(Boolean\)/);
+assert.match(erpReportGeneratorSource, /let CHECK_RECOMMENDATION_RULES = Object\.freeze\(/);
+assert.match(erpReportGeneratorSource, /function recommendedCheckIds\(/);
+assert.match(erpReportGeneratorSource, /const SLOWNESS_ISSUE = "Lentidão"/);
+assert.match(erpReportGeneratorSource, /name="slowness_connections" value="Wi-Fi" data-slowness-connection="wifi"/);
+assert.match(erpReportGeneratorSource, /name="slowness_connections" value="Cabo de rede" data-slowness-connection="cable"/);
+assert.match(erpReportGeneratorSource, /name="wifi_band"/);
+for (const wifiBand of ["2,4 GHz", "5 GHz", "Ambas as frequências"]) {
+  assert.match(erpReportGeneratorSource, new RegExp(wifiBand.replace(",", "\\,")));
+}
+for (const checkId of ["connection_type", "wifi_connected_band", "wifi_signal", "ethernet_link"]) {
+  assert.match(erpReportGeneratorSource, new RegExp(`id: "${checkId}"`));
+}
+assert.match(erpReportGeneratorSource, /connectionIds\.has\("wifi"\)/);
+assert.match(erpReportGeneratorSource, /connectionIds\.has\("cable"\)/);
+assert.match(erpReportGeneratorSource, /Detalhes da lentidão:/);
+assert.match(erpReportGeneratorSource, /\["ativo", "Será realizado contato ativo com o cliente", \["\*"\]\]/);
+assert.match(erpReportGeneratorSource, /const DRAFT_STORAGE_PREFIX = "way-tools:erp-report-draft:v1:"/);
+assert.match(erpReportGeneratorSource, /function serializeReportDraft\(/);
+assert.match(erpReportGeneratorSource, /function saveReportDraft\(/);
+assert.match(erpReportGeneratorSource, /function loadReportDraft\(/);
+assert.match(erpReportGeneratorSource, /function restoreReportDraft\(/);
+assert.match(erpReportGeneratorSource, /sessionStorage\.setItem\(storageKey/);
+assert.match(erpReportGeneratorSource, /sessionStorage\.removeItem\(storageKey\)/);
+assert.match(erpReportGeneratorSource, /data-reset>Resetar formulário/);
+assert.match(erpReportGeneratorSource, /Rascunho restaurado/);
+assert.match(erpReportGeneratorSource, /removeReportDraft\(draftStorageKey\);\s*root\.remove\(\)/);
+assert.match(erpReportGeneratorSource, /function buildDeveloperCatalog\(/);
+assert.match(erpReportGeneratorSource, /generatorVersion:\s*"1\.13"/);
+for (const stageId of ["attendance", "problem", "checks", "actions", "finalization", "preview"]) {
+  assert.match(erpReportGeneratorSource, new RegExp(`id: "${stageId}"`));
+}
+assert.match(erpReportGeneratorSource, /id:\s*"recommendations"/);
+assert.match(erpReportGeneratorSource, /WayToolsReportGeneratorDeveloper/);
+assert.match(erpReportGeneratorSource, /waytools:report-generator-developer-ready/);
+assert.match(erpReportGeneratorSource, /location\.protocol !== "chrome-extension:"/);
+assert.match(erpReportGeneratorSource, /Para o problema de lentidão, informe se ele ocorre no Wi-Fi, no cabo ou em ambos/);
+
+function evaluateReportGeneratorCatalog(protocol, override = undefined) {
+  const context = {
+    console: { info() {}, warn() {}, error() {} },
+    location: { protocol, pathname: "/developer/report-generator-preview.html" },
+    document: {
+      documentElement: { appendChild() {} },
+      getElementById() { return null; },
+      createElement() { return {}; },
+      querySelectorAll() { return []; },
+      addEventListener() {},
+      dispatchEvent() {}
+    },
+    MutationObserver: class {
+      observe() {}
+    },
+    CustomEvent: class {
+      constructor(type) { this.type = type; }
+    },
+    WAY_TOOLS_REPORT_GENERATOR_DEVELOPER_OVERRIDE: override,
+    WayToolsRuntime: {
+      run(_scriptId, start) { start(); },
+      registerMenuCommand() { return "report-generator-test"; }
+    }
+  };
+  vm.runInNewContext(erpReportGeneratorSource, context);
+  return context;
+}
+
+const reportDeveloperContext = evaluateReportGeneratorCatalog("chrome-extension:");
+assert.ok(reportDeveloperContext.WayToolsReportGeneratorDeveloper, "O catálogo interno precisa ser exposto na página de desenvolvimento.");
+const reportDeveloperCatalog = JSON.parse(JSON.stringify(
+  reportDeveloperContext.WayToolsReportGeneratorDeveloper.getCatalog()
+));
+assert.equal(reportDeveloperCatalog.generatorVersion, "1.13");
+assert.equal(reportDeveloperCatalog.schemaVersion, 3);
+assert.deepEqual(
+  reportDeveloperCatalog.stages.map((stage) => stage.id),
+  ["attendance", "problem", "checks", "actions", "finalization", "preview"]
+);
+assert.ok(reportDeveloperCatalog.stages.every((stage) =>
+  stage.categories.length > 0 && stage.categories.every((category) => Array.isArray(category.options))
+));
+assert.ok(
+  reportDeveloperCatalog.stages.find((stage) => stage.id === "checks")
+    .categories.find((category) => category.id === "recommendations").options.length > 0,
+  "As regras de verificações importantes precisam fazer parte do JSON de desenvolvimento."
+);
+const nativeChecks = reportDeveloperCatalog.stages.find((stage) => stage.id === "checks")
+  .categories.find((category) => category.id === "checks").options;
+const selfieCheck = nativeChecks.find((option) => option.id === "selfie");
+assert.deepEqual(selfieCheck, {
+  id: "selfie",
+  label: "Selfie com Documento",
+  order: -1,
+  products: ["internet", "roteador"],
+  contacts: ["Solicitação"],
+  triggers: { requests: ["wifi_password", "wifi_name"] },
+  priority: { enabled: true, order: 1 }
+}, "A verificação de selfie precisa fazer parte do catálogo nativo com a rota aprovada.");
+const attendanceStage = reportDeveloperCatalog.stages.find((stage) => stage.id === "attendance");
+const problemStage = reportDeveloperCatalog.stages.find((stage) => stage.id === "problem");
+const checksStage = reportDeveloperCatalog.stages.find((stage) => stage.id === "checks");
+const actionsStage = reportDeveloperCatalog.stages.find((stage) => stage.id === "actions");
+const finalizationStage = reportDeveloperCatalog.stages.find((stage) => stage.id === "finalization");
+const noInteractionAttempts = attendanceStage.categories
+  .find((category) => category.id === "no_interaction_attempts").options;
+assert.equal(noInteractionAttempts[0].value, "");
+assert.equal(noInteractionAttempts[0].label, "Sem interação");
+const internetSlowness = problemStage.categories
+  .find((category) => category.id === "issues_internet").options
+  .find((option) => option.id === "internet_slowness");
+assert.equal(internetSlowness.label, "Lentidão");
+const wifiBandGuidance = actionsStage.categories
+  .find((category) => category.id === "actions").options
+  .find((option) => option.id === "wifi_band_usage_guidance");
+assert.deepEqual(wifiBandGuidance.products, ["internet"]);
+assert.deepEqual(wifiBandGuidance.triggers.issues, ["internet_slowness"]);
+assert.equal(wifiBandGuidance.priority.enabled, true);
+const tvBoxRemoteRequest = problemStage.categories
+  .find((category) => category.id === "requests").options
+  .find((option) => option.id === "tv_box_remote_exchange_damage");
+assert.equal(tvBoxRemoteRequest?.label, "Troca do controle remoto da TV Box por danos");
+assert.deepEqual(tvBoxRemoteRequest?.products, ["tv_box"]);
+const tvBoxRemoteDamageCheck = nativeChecks.find((option) => option.id === "tv_box_remote_damage");
+assert.deepEqual(tvBoxRemoteDamageCheck?.products, ["tv_box"]);
+assert.deepEqual(tvBoxRemoteDamageCheck?.contacts, ["Solicitação"]);
+assert.deepEqual(tvBoxRemoteDamageCheck?.triggers?.requests, ["tv_box_remote_exchange_damage"]);
+assert.equal(tvBoxRemoteDamageCheck?.priority?.enabled, true);
+const radiusAuthenticationCheck = nativeChecks.find((option) => option.id === "radius_auth");
+assert.equal(radiusAuthenticationCheck?.label, "Consultado o log RADIUS e verificada a autenticação da conexão");
+assert.deepEqual(radiusAuthenticationCheck?.products, ["internet", "roteador"]);
+assert.deepEqual(radiusAuthenticationCheck?.triggers?.issues, ["internet_no_access"]);
+assert.equal(radiusAuthenticationCheck?.priority?.enabled, true);
+assert.equal(radiusAuthenticationCheck?.priority?.order, 4);
+const radiusRecommendation = checksStage.categories
+  .find((category) => category.id === "recommendations").options
+  .find((option) => option.product === "internet" && option.checks.includes("radius_auth"));
+assert.deepEqual(radiusRecommendation?.issues, ["Sem acesso à internet"]);
+assert.ok(radiusRecommendation?.checks.includes("nme_nce_link"));
+const nmeNceLinkCheck = nativeChecks.find((option) => option.id === "nme_nce_link");
+assert.equal(nmeNceLinkCheck?.label, "Verificado no NME/NCE se a conexão está linkando");
+assert.deepEqual(nmeNceLinkCheck?.products, ["internet", "roteador"]);
+assert.deepEqual(nmeNceLinkCheck?.triggers?.issues, ["internet_no_access"]);
+assert.equal(nmeNceLinkCheck?.priority?.enabled, true);
+assert.equal(nmeNceLinkCheck?.priority?.order, 5);
+const reportProductIds = new Set(
+  attendanceStage.categories.find((category) => category.id === "products").options.map((option) => option.id)
+);
+const reportContactLabels = new Set(
+  attendanceStage.categories.find((category) => category.id === "contact_types").options.map((option) => option.label)
+);
+const reportRequestIds = new Set(
+  problemStage.categories.find((category) => category.id === "requests").options.map((option) => option.id)
+);
+const reportIssueIds = new Set(
+  problemStage.categories
+    .filter((category) => category.id.startsWith("issues_"))
+    .flatMap((category) => category.options.map((option) => option.id))
+);
+for (const stage of reportDeveloperCatalog.stages) {
+  const categoryIds = stage.categories.map((category) => category.id);
+  assert.equal(new Set(categoryIds).size, categoryIds.length, `A etapa ${stage.id} contém categorias duplicadas.`);
+  for (const category of stage.categories) {
+    const optionIds = category.options.map((option) => option.id).filter(Boolean);
+    assert.equal(new Set(optionIds).size, optionIds.length, `A categoria ${category.id} contém IDs duplicados.`);
+  }
+}
+for (const category of [
+  ...checksStage.categories.filter((item) => ["checks", "measurements"].includes(item.id)),
+  ...actionsStage.categories,
+  ...finalizationStage.categories.filter((item) => ["outcomes", "visit_reasons"].includes(item.id))
+]) {
+  for (const option of category.options) {
+    assert.ok((option.products || ["*"]).every((id) => id === "*" || reportProductIds.has(id)),
+      `${category.id}/${option.id} referencia um produto inexistente.`);
+    assert.ok((option.contacts || ["*"]).every((label) => label === "*" || reportContactLabels.has(label)),
+      `${category.id}/${option.id} referencia um motivo de contato inexistente.`);
+    assert.ok((option.triggers?.requests || []).every((id) => reportRequestIds.has(id)),
+      `${category.id}/${option.id} referencia uma solicitação inexistente.`);
+    assert.ok((option.triggers?.issues || []).every((id) => reportIssueIds.has(id)),
+      `${category.id}/${option.id} referencia um problema inexistente.`);
+  }
+}
+assert.ok(
+  attendanceStage.categories.find((category) => category.id === "products")
+    .options.some((option) => option.id === "way_vision" && option.label === "Way Vision"),
+  "Way Vision precisa estar disponível como produto do relato."
+);
+const wayVisionIssues = problemStage.categories.find((category) => category.id === "issues_way_vision").options;
+assert.equal(wayVisionIssues.length, 20, "Way Vision precisa oferecer o catálogo completo de problemas de câmera.");
+for (const requestId of [
+  "vision_installation", "vision_wifi_change", "vision_pairing", "vision_share",
+  "vision_recording_guidance", "vision_notifications"
+]) {
+  assert.ok(
+    problemStage.categories.find((category) => category.id === "requests")
+      .options.some((option) => option.id === requestId && option.products.includes("way_vision")),
+    `Solicitação ${requestId} precisa estar vinculada ao Way Vision.`
+  );
+}
+const wayVisionCheckIds = [
+  "vision_power", "vision_network", "vision_wifi", "vision_app", "vision_account",
+  "vision_pairing", "vision_live", "vision_quality", "vision_night", "vision_recording",
+  "vision_storage", "vision_motion", "vision_notifications", "vision_audio", "vision_datetime",
+  "vision_firmware", "vision_remote", "vision_share", "vision_ptz", "vision_physical"
+];
+for (const checkId of wayVisionCheckIds) {
+  assert.ok(nativeChecks.some((option) => option.id === checkId && option.products.includes("way_vision")),
+    `Verificação ${checkId} precisa estar vinculada ao Way Vision.`);
+}
+const wayVisionRecommendations = checksStage.categories.find((category) => category.id === "recommendations")
+  .options.filter((option) => option.product === "way_vision");
+assert.equal(wayVisionRecommendations.length, 9, "Os problemas do Way Vision precisam possuir nove rotas de recomendações.");
+const wayVisionIssueLabels = new Set(wayVisionIssues.map((option) => option.label));
+const nativeCheckIds = new Set(nativeChecks.map((option) => option.id));
+for (const rule of wayVisionRecommendations) {
+  assert.ok(rule.issues.every((issue) => wayVisionIssueLabels.has(issue)),
+    `A regra ${rule.id} não pode referenciar um problema inexistente do Way Vision.`);
+  assert.ok(rule.checks.every((checkId) => nativeCheckIds.has(checkId)),
+    `A regra ${rule.id} não pode referenciar uma verificação inexistente.`);
+}
+assert.ok(
+  checksStage.categories.find((category) => category.id === "measurements")
+    .options.filter((option) => option.products.includes("way_vision")).length >= 5,
+  "Way Vision precisa possuir medições de rede, armazenamento e vídeo."
+);
+assert.ok(
+  actionsStage.categories.find((category) => category.id === "actions")
+    .options.filter((option) => option.products.includes("way_vision")).length >= 13,
+  "Way Vision precisa possuir ações corretivas específicas."
+);
+assert.ok(
+  finalizationStage.categories.find((category) => category.id === "visit_reasons")
+    .options.filter((option) => option.products.includes("way_vision")).length >= 5,
+  "Way Vision precisa possuir motivos específicos para visita técnica."
+);
+const linkedCatalog = JSON.parse(JSON.stringify(reportDeveloperCatalog));
+linkedCatalog.stages.find((stage) => stage.id === "checks")
+  .categories.find((category) => category.id === "checks").options.push({
+    id: "wifi_credentials_confirmed",
+    label: "Confirmados nome e senha da rede Wi-Fi",
+    products: ["internet", "roteador"],
+    contacts: ["Solicitação"],
+    triggers: { requests: ["wifi_password", "wifi_name"] },
+    order: 15,
+    priority: { enabled: true, order: 5 }
+  });
+const reportOverrideContext = evaluateReportGeneratorCatalog("chrome-extension:", linkedCatalog);
+const overriddenChecks = reportOverrideContext.WayToolsReportGeneratorDeveloper.getCatalog()
+  .stages.find((stage) => stage.id === "checks")
+  .categories.find((category) => category.id === "checks").options;
+assert.ok(overriddenChecks.some((option) =>
+  option.id === "wifi_credentials_confirmed" &&
+  option.triggers.requests.includes("wifi_password") &&
+  option.triggers.requests.includes("wifi_name") &&
+  option.order === 15 &&
+  option.priority.enabled === true &&
+  option.priority.order === 5
+), "O simulador precisa compilar vínculos visuais salvos no catálogo local.");
+assert.equal(
+  overriddenChecks.findIndex((option) => option.id === "wifi_credentials_confirmed"),
+  2,
+  "A ordem configurada precisa reposicionar a opção entre os itens 10 e 20."
+);
+const reportProductionContext = evaluateReportGeneratorCatalog("https:");
+assert.equal(
+  reportProductionContext.WayToolsReportGeneratorDeveloper,
+  undefined,
+  "A API do estúdio não pode ser exposta dentro do ERP."
+);
+assert.match(erpReportGeneratorSource, /function generateNoInteractionReport\(/);
+assert.match(erpReportGeneratorSource, /data-no-interaction-section/);
+assert.match(erpReportGeneratorSource, /Gerar relato rápido/);
+assert.match(erpReportGeneratorSource, /way-report-check\.recommended/);
+assert.match(erpReportGeneratorSource, /Marque somente o que foi realmente verificado/);
+assert.match(erpReportGeneratorSource, /Chat sem interação → relato rápido/);
+assert.match(erpReportGeneratorSource, /let OUTCOME_VALIDATION = Object\.freeze\(/);
 assert.match(erpReportGeneratorSource, /function selectedProductIds\(/);
+assert.match(erpReportGeneratorSource, /function selectedOptionIds\(/);
+assert.match(erpReportGeneratorSource, /function selectedIssueIds\(/);
 assert.match(erpReportGeneratorSource, /function routeAllows\(/);
+assert.match(erpReportGeneratorSource, /function orderedEntries\(/);
 assert.match(erpReportGeneratorSource, /data-route-products=/);
+assert.match(erpReportGeneratorSource, /data-route-requests=/);
+assert.match(erpReportGeneratorSource, /data-route-issues=/);
+assert.match(erpReportGeneratorSource, /data-option-order=/);
+assert.match(erpReportGeneratorSource, /data-priority-enabled=/);
+assert.match(erpReportGeneratorSource, /-100000 \+ priorityOrder/);
 assert.match(erpReportGeneratorSource, /data-route-summary/);
 assert.match(erpReportGeneratorSource, /way-report-optional/);
 assert.match(erpReportGeneratorSource, /Selecione pelo menos um produto ou serviço para montar a rota do relato/);
@@ -1466,16 +2392,16 @@ await runtimeContext.WayToolsRuntime.run("matrix-mensagens", (storage) => {
 
 let observedSharedCatalog;
 const stopObservingSharedCatalog = matrixStorageAdapter.onSharedValueChanged(
-  "messages.catalog.v1",
+  "messages.catalog.n2.v1",
   (newValue) => {
     observedSharedCatalog = newValue;
   }
 );
 const sharedCatalog = [{ id: "shared-test", comando: "teste" }];
-chatwootStorageAdapter.setSharedValue("messages.catalog.v1", sharedCatalog);
+chatwootStorageAdapter.setSharedValue("messages.catalog.n2.v1", sharedCatalog);
 runtimeStorageListeners[0](
   {
-    "wayTools.shared.messages.catalog.v1": {
+    "wayTools.shared.messages.catalog.n2.v1": {
       oldValue: undefined,
       newValue: sharedCatalog
     }
@@ -1484,30 +2410,51 @@ runtimeStorageListeners[0](
 );
 assert.deepEqual(observedSharedCatalog, sharedCatalog);
 assert.deepEqual(
-  matrixStorageAdapter.getSharedValue("messages.catalog.v1", null),
+  matrixStorageAdapter.getSharedValue("messages.catalog.n2.v1", null),
   sharedCatalog,
-  "ChatWoot e Matrix devem acessar o mesmo catálogo de mensagens."
+  "ChatWoot e Matrix devem acessar o mesmo catálogo N2."
 );
 stopObservingSharedCatalog();
 assert.equal(runtimeStorageListeners.length, 0);
 
-assert.match(scriptSource, /const SHARED_MESSAGES_KEY\s*=\s*['"]messages\.catalog\.v1['"]/);
-assert.match(matrixMessagesSource, /const SHARED_MESSAGES_KEY\s*=\s*['"]messages\.catalog\.v1['"]/);
-assert.match(scriptSource, /storage\.setSharedValue\(\s*SHARED_MESSAGES_KEY/);
-assert.match(matrixMessagesSource, /storage\.setSharedValue\(SHARED_MESSAGES_KEY/);
-assert.match(scriptSource, /storage\.onSharedValueChanged\(\s*SHARED_MESSAGES_KEY/);
-assert.match(matrixMessagesSource, /storage\.onSharedValueChanged\(SHARED_MESSAGES_KEY/);
+const sacCatalog = [{ id: "sac-test", comando: "sac" }];
+chatwootStorageAdapter.setSharedValue("messages.catalog.sac.v1", sacCatalog);
+chatwootStorageAdapter.setSharedValue("messages.sector.v1", "sac");
+assert.deepEqual(matrixStorageAdapter.getSharedValue("messages.catalog.sac.v1", null), sacCatalog);
+assert.equal(matrixStorageAdapter.getSharedValue("messages.sector.v1", null), "sac");
+assert.deepEqual(
+  matrixStorageAdapter.getSharedValue("messages.catalog.n2.v1", null),
+  sharedCatalog,
+  "A troca para SAC não deve sobrescrever o catálogo N2."
+);
+
+for (const source of [scriptSource, matrixMessagesSource]) {
+  assert.match(source, /LEGACY_SHARED_MESSAGES_KEY\s*=\s*['"]messages\.catalog\.v1['"]/);
+  assert.match(source, /MESSAGE_SECTOR_KEY\s*=\s*['"]messages\.sector\.v1['"]/);
+  assert.match(source, /n2:\s*['"]messages\.catalog\.n2\.v1['"]/);
+  assert.match(source, /sac:\s*['"]messages\.catalog\.sac\.v1['"]/);
+  assert.match(source, /onSharedValueChanged\(\s*MESSAGE_SECTOR_KEY/);
+}
+assert.match(scriptSource, /setorMensagensAtivo\s*===\s*'n2'/);
+assert.match(matrixMessagesSource, /activeSector\s*===\s*"n2"/);
 
 const javascriptFiles = [
   "config/scripts.js",
   "config/default-messages.js",
   "config/spelling-dictionary.js",
+  "content/instance-coordinator.js",
+  "content/message-catalog-manager.js",
+  "content/message-experience.js",
+  "content/backup-manager.js",
   "content/runtime.js",
   "content/chatwoot-realtime-bridge.js",
   "content/message-notification-policy.js",
   "content/spelling-engine.js",
   "background/service-worker.js",
   "popup/popup.js",
+  "popup/diagnostics.js",
+  "developer/report-generator-preview.js",
+  "developer/sac-catalog-review.js",
   "scripts/way-mensagens.js",
   "scripts/matrix-mensagens.js",
   "scripts/matrix-interface-compacta.js",

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": 1,
+  "profile": "sac",
+  "status": "rascunho_para_aprovacao",
+  "approvalRequired": true,
+  "notice": "Estas mensagens são propostas. Devem ser aprovadas conforme as regras comerciais e contratuais da empresa antes de entrarem no catálogo padrão.",
+  "recommendedFirstPackage": [
+    "abertura", "entendi", "aguarde", "retorno", "protocolo", "triagem",
+    "encaminharn2", "dez", "quin", "encerrar", "pesquisa", "agradecimento"
+  ],
+  "categories": [
+    {
+      "id": "atendimento_inicial",
+      "label": "👋 Atendimento inicial",
+      "order": 10,
+      "commands": [
+        { "command": "abertura", "targetCategory": "abertura", "title": "Saudação conforme o horário", "firstPackage": true, "status": "aguardando_aprovacao", "type": "time_variant", "morning": "Bom dia! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Atendimento da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?", "afternoon": "Boa tarde! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Atendimento da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?", "night": "Boa noite! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Atendimento da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?" },
+        { "command": "entendi", "targetCategory": "abertura", "title": "Confirmar que a solicitação foi compreendida", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Entendi a sua solicitação. Vou verificar as informações necessárias para lhe orientar da melhor forma possível." },
+        { "command": "aguarde", "targetCategory": "abertura", "title": "Informar que será realizada uma consulta", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Vou consultar algumas informações para dar continuidade ao seu atendimento. Peço que aguarde um momento, por gentileza." },
+        { "command": "retorno", "targetCategory": "abertura", "title": "Agradecer pela espera e retomar", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Agradeço por aguardar! Já concluí a consulta e vamos dar continuidade ao seu atendimento." }
+      ]
+    },
+    {
+      "id": "identificacao_seguranca",
+      "label": "🪪 Identificação e segurança",
+      "order": 20,
+      "commands": [
+        { "command": "confirmadados", "targetCategory": "identificacao", "title": "Solicitar confirmação dos dados permitidos", "status": "planejado" },
+        { "command": "titular", "targetCategory": "identificacao", "title": "Explicar a necessidade do titular ou autorização", "status": "planejado" },
+        { "command": "documentos", "targetCategory": "documentos", "title": "Solicitar documentação", "status": "planejado" },
+        { "command": "selfie", "targetCategory": "documentos", "title": "Solicitar validação de identidade, quando aplicável", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "financeiro",
+      "label": "💳 Financeiro",
+      "order": 30,
+      "commands": [
+        { "command": "segundavia", "targetCategory": "financeiro", "title": "Segunda via de cobrança", "aliases": ["boleto", "2via"], "status": "planejado" },
+        { "command": "pagamento", "targetCategory": "financeiro", "title": "Orientações gerais de pagamento", "status": "planejado" },
+        { "command": "comprovante", "targetCategory": "financeiro", "title": "Solicitar comprovante", "status": "planejado" },
+        { "command": "compensacao", "targetCategory": "financeiro", "title": "Explicar o prazo de reconhecimento do pagamento", "status": "planejado" },
+        { "command": "negociacao", "targetCategory": "financeiro", "title": "Orientações ou encaminhamento para negociação", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "cadastro_contrato",
+      "label": "📝 Cadastro e contrato",
+      "order": 40,
+      "commands": [
+        { "command": "alterarcadastro", "targetCategory": "cadastro", "title": "Atualização cadastral", "status": "planejado" },
+        { "command": "mudancaendereco", "targetCategory": "cadastro", "title": "Mudança de endereço", "status": "planejado" },
+        { "command": "mudancatitular", "targetCategory": "cadastro", "title": "Alteração de titularidade", "status": "planejado" },
+        { "command": "contrato", "targetCategory": "contrato", "title": "Informações contratuais", "status": "planejado" },
+        { "command": "fidelidade", "targetCategory": "contrato", "title": "Informações sobre permanência ou fidelidade", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "planos_servicos",
+      "label": "📦 Planos e serviços",
+      "order": 50,
+      "commands": [
+        { "command": "planos", "targetCategory": "planos", "title": "Apresentar ou encaminhar para planos disponíveis", "status": "planejado" },
+        { "command": "upgrade", "targetCategory": "planos", "title": "Aumento do plano", "status": "planejado" },
+        { "command": "downgrade", "targetCategory": "planos", "title": "Redução do plano", "status": "planejado" },
+        { "command": "viabilidade", "targetCategory": "planos", "title": "Consulta de disponibilidade no endereço", "status": "planejado" },
+        { "command": "servicoadicional", "targetCategory": "planos", "title": "Contratação de produtos adicionais", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "triagem_encaminhamento",
+      "label": "↗️ Triagem e encaminhamento",
+      "order": 60,
+      "commands": [
+        { "command": "triagem", "targetCategory": "diagnostico", "title": "Coletar informações iniciais", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Para direcionar corretamente a sua solicitação, poderia descrever brevemente o que precisa e informar qual serviço da Way está relacionado ao atendimento?" },
+        { "command": "encaminharn2", "targetCategory": "encaminhamento", "title": "Encaminhar ao suporte especializado", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Para que a sua solicitação seja analisada com mais detalhes, vou direcionar este atendimento à nossa equipe de suporte especializado." },
+        { "command": "encaminharfinanceiro", "targetCategory": "encaminhamento", "title": "Encaminhar ao financeiro", "status": "planejado" },
+        { "command": "encaminharcomercial", "targetCategory": "encaminhamento", "title": "Encaminhar ao comercial", "status": "planejado" },
+        { "command": "indisponibilidade", "targetCategory": "encaminhamento", "title": "Informar ocorrência ou indisponibilidade identificada", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "acompanhamento",
+      "label": "🔄 Acompanhamento",
+      "order": 70,
+      "commands": [
+        { "command": "protocolo", "targetCategory": "acompanhamento", "title": "Apresentar o protocolo", "firstPackage": true, "status": "aguardando_aprovacao", "text": "O protocolo deste atendimento é **{{protocolo}}**." },
+        { "command": "prazo", "targetCategory": "acompanhamento", "title": "Explicar que existe prazo para a solicitação", "status": "planejado" },
+        { "command": "acompanhamento", "targetCategory": "acompanhamento", "title": "Informar como acompanhar a demanda", "status": "planejado" },
+        { "command": "andamento", "targetCategory": "acompanhamento", "title": "Informar que a solicitação permanece em análise", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "cancelamento_retencao",
+      "label": "🛑 Cancelamento e retenção",
+      "order": 80,
+      "commands": [
+        { "command": "cancelamento", "targetCategory": "cancelamento", "title": "Confirmar a solicitação e iniciar o procedimento", "status": "planejado" },
+        { "command": "motivo", "targetCategory": "cancelamento", "title": "Perguntar o motivo do cancelamento", "status": "planejado" },
+        { "command": "retencao", "targetCategory": "cancelamento", "title": "Apresentar possibilidade de análise de alternativas", "status": "planejado" },
+        { "command": "devolucao", "targetCategory": "cancelamento", "title": "Orientar sobre devolução de equipamentos", "status": "planejado" }
+      ]
+    },
+    {
+      "id": "ausencia_encerramento",
+      "label": "✅ Ausência e encerramento",
+      "order": 90,
+      "commands": [
+        { "command": "dez", "targetCategory": "ausencia", "title": "Solicitar retorno para continuar", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Você ainda está por aí?\nPreciso do seu retorno para dar continuidade ao atendimento." },
+        { "command": "quin", "targetCategory": "ausencia", "title": "Avisar sobre a pausa por ausência", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Oi, você ainda está por aí?\nVou aguardar mais 5 minutos. Caso não tenha retorno, vou pausar nossa conversa. Quando você responder, seguimos de onde paramos." },
+        { "command": "serviconormal", "targetCategory": "encerramento", "title": "Confirmar normalização do serviço", "status": "planejado" },
+        { "command": "encerrar", "targetCategory": "encerramento", "title": "Encerramento geral", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Posso ajudar com mais alguma informação? Caso não haja outra solicitação, finalizarei este atendimento." },
+        { "command": "pesquisa", "targetCategory": "encerramento", "title": "Solicitar participação na pesquisa", "firstPackage": true, "status": "aguardando_aprovacao", "text": "Ao final deste atendimento, você receberá uma **breve pesquisa de satisfação**.\n\nSua avaliação é muito importante para aprimorarmos continuamente nossos serviços e atendimentos. Contamos com a sua participação! 😊" },
+        { "command": "agradecimento", "targetCategory": "encerramento", "title": "Agradecimento conforme o horário", "firstPackage": true, "status": "aguardando_aprovacao", "type": "time_variant", "morning": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nCaso precise de novas informações, nossa equipe permanece à disposição.\n\n💙 A Way Internet agradece e deseja um excelente dia!", "afternoon": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nCaso precise de novas informações, nossa equipe permanece à disposição.\n\n💙 A Way Internet agradece e deseja uma excelente tarde!", "night": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nCaso precise de novas informações, nossa equipe permanece à disposição.\n\n💙 A Way Internet agradece e deseja uma excelente noite!" }
+      ]
+    }
+  ]
+}

@@ -25,12 +25,33 @@
   const notificationWhenFocused = document.querySelector("#notification-when-focused");
   const notificationWhenFocusedDescription = document.querySelector("#notification-when-focused-description");
   const notificationSettingsStatus = document.querySelector("#notification-settings-status");
+  const sectorOnboarding = document.querySelector("#sector-onboarding");
+  const initialSectorOptions = [...document.querySelectorAll('input[name="initial-sector"]')];
+  const confirmInitialSector = document.querySelector("#confirm-initial-sector");
+  const messageSector = document.querySelector("#message-sector");
+  const messageSectorDescription = document.querySelector("#message-sector-description");
+  const messageSectorStatus = document.querySelector("#message-sector-status");
   const tabButtons = [...document.querySelectorAll("[data-tab-target]")];
   const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
   const compatibleScriptsList = document.querySelector("#compatible-scripts-list");
   const compatibleCount = document.querySelector("#compatible-count");
   const openToolsButton = document.querySelector("#open-tools");
   const openSettingsButton = document.querySelector("#open-settings");
+  const developerSettings = document.querySelector("#developer-settings");
+  const testReportGenerator = document.querySelector("#test-report-generator");
+  const reviewSacCatalog = document.querySelector("#review-sac-catalog");
+  const disableDeveloperMode = document.querySelector("#disable-developer-mode");
+  const developerStatus = document.querySelector("#developer-status");
+  const activeProfileBadge = document.querySelector("#active-profile-badge");
+  const diagnosticsList = document.querySelector("#diagnostics-list");
+  const refreshDiagnostics = document.querySelector("#refresh-diagnostics");
+  const diagnosticsStatus = document.querySelector("#diagnostics-status");
+  const exportBackupButton = document.querySelector("#export-backup");
+  const selectBackupButton = document.querySelector("#select-backup");
+  const backupFile = document.querySelector("#backup-file");
+  const backupMode = document.querySelector("#backup-mode");
+  const undoBackupImport = document.querySelector("#undo-backup-import");
+  const backupStatus = document.querySelector("#backup-status");
 
   const personalDictionaryStorageKey =
     "wayTools.data.way-corretor-ortografico-pro.way-corretor-dicionario-pessoal-v1";
@@ -38,6 +59,24 @@
   const notificationDurationDefault = "5";
   const notificationWhenFocusedStorageKey = "wayTools.notifications.whenFocused";
   const notificationWhenFocusedDefault = false;
+  const messageSectorStorageKey = "wayTools.shared.messages.sector.v1";
+  const messageSectorPreferenceStorageKey = "wayTools.preferences.messageSector.v1";
+  const developerModeStorageKey = "wayTools.developerMode.enabled";
+  const developerModeClickTarget = 7;
+  const developerModeClickWindowMs = 4000;
+  const legacyMessageCatalogStorageKey = "wayTools.shared.messages.catalog.v1";
+  const legacyChatwootCatalogStorageKey =
+    "wayTools.data.way-mensagens.way-mensagens-personalizadas-v1";
+  const legacyMatrixCatalogStorageKey =
+    "wayTools.data.matrix-mensagens.way-matrix-mensagens-personalizadas-v1";
+  const messageCatalogStorageKeys = Object.freeze({
+    n2: "wayTools.shared.messages.catalog.n2.v1",
+    sac: "wayTools.shared.messages.catalog.sac.v1"
+  });
+  const messageSectorDescriptions = Object.freeze({
+    n2: "Carrega as mensagens padrão atuais e mantém as personalizações exclusivas do N2.",
+    sac: "Usa um catálogo independente. Por enquanto, o SAC começa sem mensagens padrão."
+  });
   const notificationDurationDescriptions = Object.freeze({
     disabled: "Não exibir notificações de novas mensagens.",
     windows: "Usar o tempo definido pelo Windows e manter o aviso na Central de Notificações.",
@@ -59,8 +98,50 @@
     corrections: {},
     ignored: []
   };
+  let developerModeClicks = [];
 
   extensionVersion.textContent = `v${chrome.runtime.getManifest().version}`;
+
+  function setDeveloperModeVisibility(enabled) {
+    developerSettings.hidden = !enabled;
+    developerSettings.setAttribute("aria-hidden", String(!enabled));
+  }
+
+  async function loadDeveloperMode() {
+    const stored = await chrome.storage.local.get(developerModeStorageKey);
+    setDeveloperModeVisibility(stored[developerModeStorageKey] === true);
+  }
+
+  async function enableDeveloperMode() {
+    await chrome.storage.local.set({ [developerModeStorageKey]: true });
+    setDeveloperModeVisibility(true);
+    activateTab("settings");
+    developerSettings.scrollIntoView({ block: "center", behavior: "smooth" });
+    developerStatus.textContent = "Modo desenvolvedor liberado neste navegador.";
+  }
+
+  async function disableDeveloperModeAccess() {
+    await chrome.storage.local.set({ [developerModeStorageKey]: false });
+    setDeveloperModeVisibility(false);
+    developerModeClicks = [];
+  }
+
+  function registerDeveloperModeClick() {
+    const now = Date.now();
+    developerModeClicks = developerModeClicks.filter((timestamp) =>
+      now - timestamp <= developerModeClickWindowMs
+    );
+    developerModeClicks.push(now);
+
+    if (developerModeClicks.length < developerModeClickTarget) {
+      return;
+    }
+
+    developerModeClicks = [];
+    enableDeveloperMode().catch((error) => {
+      console.error("[Way Tools] Falha ao liberar modo desenvolvedor:", error);
+    });
+  }
 
   function enabledKey(scriptId) {
     return `wayTools.scripts.${scriptId}.enabled`;
@@ -97,6 +178,195 @@
     return Object.prototype.hasOwnProperty.call(notificationDurationDescriptions, value)
       ? value
       : notificationDurationDefault;
+  }
+
+  function normalizeMessageSector(value) {
+    return String(value || "").toLocaleLowerCase("pt-BR") === "sac" ? "sac" : "n2";
+  }
+
+  function validMessageSector(value) {
+    return value === "n2" || value === "sac" ? value : null;
+  }
+
+  function cloneNativeMessages(sector = "n2") {
+    if (globalThis.WayToolsMessageCatalogs?.nativeMessages) {
+      return globalThis.WayToolsMessageCatalogs.nativeMessages(sector);
+    }
+
+    const nativeMessages = globalThis.WAY_TOOLS_NATIVE_MESSAGES;
+    return Array.isArray(nativeMessages)
+      ? nativeMessages.map((message) => ({ ...message }))
+      : [];
+  }
+
+  function updateMessageSectorInterface(sector) {
+    const normalizedSector = normalizeMessageSector(sector);
+    messageSector.value = normalizedSector;
+    messageSectorDescription.textContent = messageSectorDescriptions[normalizedSector];
+    activeProfileBadge.textContent = `Perfil: ${normalizedSector.toUpperCase()}`;
+    activeProfileBadge.dataset.sector = normalizedSector;
+  }
+
+  function downloadJson(content, fileName) {
+    const url = URL.createObjectURL(new Blob([content], { type: "application/json;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function exportCompleteBackup() {
+    const manager = globalThis.WayToolsBackupManager;
+    if (!manager) throw new Error("Módulo de backup indisponível.");
+    const backup = await manager.exportFromStorage(chrome.storage.local, chrome.runtime.getManifest().version);
+    downloadJson(manager.serialize(backup), manager.fileName());
+    backupStatus.textContent = `${backup.entryCount} configurações incluídas no arquivo de backup.`;
+  }
+
+  async function importCompleteBackup(file) {
+    const manager = globalThis.WayToolsBackupManager;
+    if (!manager) throw new Error("Módulo de backup indisponível.");
+    const parsed = JSON.parse(await file.text());
+    const mode = backupMode.value === "replace" ? "replace" : "merge";
+    if (mode === "replace" && !window.confirm(
+      "Substituir os dados locais do Way Tools pelos dados deste backup? Um ponto de restauração será criado antes."
+    )) return;
+    const result = await manager.importToStorage(chrome.storage.local, parsed, mode);
+    backupStatus.textContent = mode === "replace"
+      ? `${result.importedCount} configurações restauradas e ${result.removedCount} antigas removidas.`
+      : `${result.importedCount} configurações mescladas com sucesso.`;
+    await initialize();
+  }
+
+  async function renderDiagnostics() {
+    return globalThis.WayToolsPopupDiagnostics.render({
+      statusElement: diagnosticsStatus,
+      listElement: diagnosticsList,
+      activeTabId,
+      activeUrl,
+      scripts,
+      scriptEnabledState,
+      messageSectorStorageKey,
+      messageCatalogStorageKeys,
+      normalizeMessageSector
+    });
+  }
+
+  async function ensureMessageCatalogProfiles() {
+    const keys = [
+      messageSectorStorageKey,
+      legacyMessageCatalogStorageKey,
+      legacyChatwootCatalogStorageKey,
+      legacyMatrixCatalogStorageKey,
+      messageCatalogStorageKeys.n2,
+      messageCatalogStorageKeys.sac
+    ];
+    const stored = await chrome.storage.local.get(keys);
+    const updates = {};
+
+    if (!Array.isArray(stored[messageCatalogStorageKeys.n2])) {
+      const legacyCatalog = [
+        stored[legacyMessageCatalogStorageKey],
+        stored[legacyChatwootCatalogStorageKey],
+        stored[legacyMatrixCatalogStorageKey]
+      ].find((catalog) => Array.isArray(catalog));
+
+      updates[messageCatalogStorageKeys.n2] = legacyCatalog || cloneNativeMessages("n2");
+    }
+
+    if (!Array.isArray(stored[messageCatalogStorageKeys.sac])) {
+      updates[messageCatalogStorageKeys.sac] = cloneNativeMessages("sac");
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await chrome.storage.local.set(updates);
+    }
+
+    if (globalThis.WayToolsMessageCatalogs?.ensureWithChromeStorage) {
+      await Promise.all([
+        globalThis.WayToolsMessageCatalogs.ensureWithChromeStorage("n2"),
+        globalThis.WayToolsMessageCatalogs.ensureWithChromeStorage("sac")
+      ]);
+    }
+
+  }
+
+  async function readSynchronizedMessageSector() {
+    try {
+      const stored = await chrome.storage.sync.get(messageSectorPreferenceStorageKey);
+      return validMessageSector(stored[messageSectorPreferenceStorageKey]);
+    } catch (error) {
+      console.warn("[Way Tools] Preferência sincronizada de setor indisponível:", error);
+      return null;
+    }
+  }
+
+  async function persistMessageSectorPreference(sector) {
+    const normalizedSector = normalizeMessageSector(sector);
+
+    await chrome.storage.local.set({
+      [messageSectorStorageKey]: normalizedSector,
+      [messageSectorPreferenceStorageKey]: normalizedSector
+    });
+
+    try {
+      await chrome.storage.sync.set({
+        [messageSectorPreferenceStorageKey]: normalizedSector
+      });
+    } catch (error) {
+      console.warn("[Way Tools] O setor foi salvo localmente, mas não pôde ser sincronizado:", error);
+    }
+
+    return normalizedSector;
+  }
+
+  async function loadPersistedMessageSector() {
+    const stored = await chrome.storage.local.get([
+      messageSectorStorageKey,
+      messageSectorPreferenceStorageKey
+    ]);
+    const localSector = validMessageSector(stored[messageSectorStorageKey]);
+    const preferenceSector = validMessageSector(stored[messageSectorPreferenceStorageKey]);
+    const synchronizedSector = localSector || preferenceSector
+      ? null
+      : await readSynchronizedMessageSector();
+    const selectedSector = localSector || preferenceSector || synchronizedSector;
+
+    if (selectedSector && (
+      localSector !== selectedSector ||
+      preferenceSector !== selectedSector
+    )) {
+      await persistMessageSectorPreference(selectedSector);
+    }
+
+    return selectedSector;
+  }
+
+  async function selectMessageSector(sector, statusMessage = "") {
+    const normalizedSector = await persistMessageSectorPreference(sector);
+    updateMessageSectorInterface(normalizedSector);
+    sectorOnboarding.hidden = true;
+    messageSectorStatus.textContent = statusMessage;
+  }
+
+  async function loadMessageSector() {
+    await ensureMessageCatalogProfiles();
+    const selectedSector = await loadPersistedMessageSector();
+    const effectiveSector = selectedSector || "n2";
+    updateMessageSectorInterface(effectiveSector);
+    sectorOnboarding.hidden = selectedSector !== null;
+
+    if (selectedSector === null) {
+      const defaultOption = initialSectorOptions.find((option) => option.value === "n2");
+      if (defaultOption) {
+        defaultOption.checked = true;
+        confirmInitialSector.disabled = false;
+        queueMicrotask(() => defaultOption.focus());
+      }
+    }
   }
 
   function updateNotificationDurationDescription(value) {
@@ -573,6 +843,43 @@
 
   openToolsButton.addEventListener("click", () => activateTab("tools", true));
   openSettingsButton.addEventListener("click", () => activateTab("settings", true));
+  extensionVersion.addEventListener("click", registerDeveloperModeClick);
+
+  testReportGenerator.addEventListener("click", async () => {
+    testReportGenerator.disabled = true;
+    developerStatus.textContent = "Abrindo ambiente de teste…";
+
+    try {
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL("developer/report-generator-preview.html")
+      });
+      window.close();
+    } catch (error) {
+      console.error("[Way Tools] Falha ao abrir o Estúdio do Gerador de Relato:", error);
+      developerStatus.textContent = "Não foi possível abrir o estúdio de desenvolvimento.";
+      testReportGenerator.disabled = false;
+    }
+  });
+
+  reviewSacCatalog.addEventListener("click", async () => {
+    reviewSacCatalog.disabled = true;
+    developerStatus.textContent = "Abrindo estúdio dos catálogos SAC e N2…";
+    try {
+      await chrome.tabs.create({ url: chrome.runtime.getURL("developer/sac-catalog-review.html") });
+      window.close();
+    } catch (error) {
+      console.error("[Way Tools] Falha ao abrir catálogo SAC:", error);
+      developerStatus.textContent = "Não foi possível abrir o estúdio de mensagens.";
+      reviewSacCatalog.disabled = false;
+    }
+  });
+
+  disableDeveloperMode.addEventListener("click", () => {
+    disableDeveloperModeAccess().catch((error) => {
+      console.error("[Way Tools] Falha ao ocultar modo desenvolvedor:", error);
+      developerStatus.textContent = "Não foi possível ocultar o modo desenvolvedor.";
+    });
+  });
 
   reloadButton.addEventListener("click", async () => {
     if (activeTabId === null || !activeUrl) {
@@ -666,15 +973,118 @@
     }
   });
 
+  for (const option of initialSectorOptions) {
+    option.addEventListener("change", () => {
+      confirmInitialSector.disabled = !initialSectorOptions.some((item) => item.checked);
+    });
+  }
+
+  confirmInitialSector.addEventListener("click", async () => {
+    const selectedOption = initialSectorOptions.find((option) => option.checked);
+
+    if (!selectedOption) {
+      return;
+    }
+
+    confirmInitialSector.disabled = true;
+
+    try {
+      await selectMessageSector(
+        selectedOption.value,
+        `Perfil ${selectedOption.value.toUpperCase()} ativado.`
+      );
+    } catch (error) {
+      console.error("[Way Tools] Falha ao salvar setor inicial:", error);
+      confirmInitialSector.disabled = false;
+    }
+  });
+
+  messageSector.addEventListener("change", async () => {
+    const previousSector = messageSector.value === "sac" ? "n2" : "sac";
+    const nextSector = normalizeMessageSector(messageSector.value);
+    messageSector.disabled = true;
+    messageSectorStatus.textContent = "Alterando o catálogo…";
+
+    try {
+      await selectMessageSector(
+        nextSector,
+        `Perfil ${nextSector.toUpperCase()} ativado no ChatWoot e no Matrix.`
+      );
+      await renderDiagnostics();
+    } catch (error) {
+      console.error("[Way Tools] Falha ao trocar setor de atendimento:", error);
+      updateMessageSectorInterface(previousSector);
+      messageSectorStatus.textContent = "Não foi possível trocar o perfil de mensagens.";
+    } finally {
+      messageSector.disabled = false;
+    }
+  });
+
+  refreshDiagnostics.addEventListener("click", () => {
+    renderDiagnostics().catch((error) => {
+      console.error("[Way Tools] Falha ao atualizar diagnóstico:", error);
+      diagnosticsStatus.textContent = "Não foi possível atualizar o diagnóstico.";
+    });
+  });
+
+  exportBackupButton.addEventListener("click", async () => {
+    exportBackupButton.disabled = true;
+    backupStatus.textContent = "Preparando backup…";
+    try {
+      await exportCompleteBackup();
+    } catch (error) {
+      console.error("[Way Tools] Falha ao exportar backup:", error);
+      backupStatus.textContent = "Não foi possível gerar o backup.";
+    } finally {
+      exportBackupButton.disabled = false;
+    }
+  });
+
+  selectBackupButton.addEventListener("click", () => backupFile.click());
+  backupFile.addEventListener("change", async () => {
+    const [file] = backupFile.files || [];
+    if (!file) return;
+    selectBackupButton.disabled = true;
+    backupStatus.textContent = "Validando e restaurando o backup…";
+    try {
+      await importCompleteBackup(file);
+    } catch (error) {
+      console.error("[Way Tools] Falha ao importar backup:", error);
+      backupStatus.textContent = error instanceof SyntaxError
+        ? "O arquivo selecionado não contém um JSON válido."
+        : error.message || "Não foi possível restaurar o backup.";
+    } finally {
+      backupFile.value = "";
+      selectBackupButton.disabled = false;
+    }
+  });
+
+  undoBackupImport.addEventListener("click", async () => {
+    undoBackupImport.disabled = true;
+    backupStatus.textContent = "Restaurando o estado anterior…";
+    try {
+      const result = await globalThis.WayToolsBackupManager.restoreRollback(chrome.storage.local);
+      backupStatus.textContent = `${result.restoredCount} configurações anteriores foram recuperadas.`;
+      await initialize();
+    } catch (error) {
+      backupStatus.textContent = error.message || "Não foi possível desfazer a importação.";
+    } finally {
+      undoBackupImport.disabled = false;
+    }
+  });
+
   async function initialize() {
     await Promise.all([
       renderScripts(),
       inspectActiveTab(),
       loadPersonalDictionary(),
       loadNotificationDuration(),
-      loadNotificationWhenFocused()
+      loadNotificationWhenFocused(),
+      loadMessageSector(),
+      loadDeveloperMode()
     ]);
     await renderPageCommands();
+    await renderDiagnostics();
   }
 
   activateTab("home");

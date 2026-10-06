@@ -1,9 +1,53 @@
 {
   "aplicativo": "Way - Mensagens Personalizadas",
-  "versaoBackup": 9,
+  "schemaVersion": 2,
+  "versaoBackup": 10,
   "exportadoEm": "2026-09-30T11:24:36.751Z",
-  "quantidade": 16,
-  "mensagens": [
+  "categorias": [
+    { "id": "abertura", "label": "👋 Abertura de atendimento", "ordem": 10, "setores": ["n2", "sac"] },
+    { "id": "identificacao", "label": "🪪 Identificação e segurança", "ordem": 20, "setores": ["sac"] },
+    { "id": "diagnostico", "label": "🔎 Diagnóstico inicial", "ordem": 30, "setores": ["n2", "sac"] },
+    { "id": "financeiro", "label": "💳 Financeiro", "ordem": 40, "setores": ["sac"] },
+    { "id": "cadastro", "label": "📝 Cadastro", "ordem": 50, "setores": ["sac"] },
+    { "id": "contrato", "label": "📑 Contrato", "ordem": 60, "setores": ["sac"] },
+    { "id": "planos", "label": "📦 Planos e serviços", "ordem": 70, "setores": ["sac"] },
+    { "id": "solicitacoes", "label": "📋 Solicitações", "ordem": 80, "setores": ["sac"] },
+    { "id": "encaminhamento", "label": "↗️ Encaminhamentos", "ordem": 90, "setores": ["sac"] },
+    { "id": "acompanhamento", "label": "🔄 Acompanhamento", "ordem": 100, "setores": ["sac"] },
+    { "id": "ajustes", "label": "🛠️ Ajustes na conexão", "ordem": 110, "setores": ["n2"] },
+    { "id": "velocidade", "label": "🚀 Teste de velocidade", "ordem": 120, "setores": ["n2"] },
+    { "id": "iptv", "label": "📺 IPTV", "ordem": 130, "setores": ["n2"] },
+    { "id": "cameras", "label": "🎥 Câmeras", "ordem": 140, "setores": ["n2"] },
+    { "id": "agendamento", "label": "📅 Agendamento de visita técnica", "ordem": 150, "setores": ["n2", "sac"] },
+    { "id": "documentos", "label": "📄 Solicitação de documentos", "ordem": 160, "setores": ["n2", "sac"] },
+    { "id": "orientacoes", "label": "📡 Orientações", "ordem": 170, "setores": ["n2", "sac"] },
+    { "id": "cancelamento", "label": "🛑 Cancelamento e retenção", "ordem": 180, "setores": ["sac"] },
+    { "id": "ausencia", "label": "⏳ Gestão de ausência", "ordem": 190, "setores": ["n2", "sac"] },
+    { "id": "encerramento", "label": "✅ Encerramento de atendimento", "ordem": 200, "setores": ["n2", "sac"] }
+  ],
+  "perfis": {
+    "n2": {
+      "versaoCatalogo": 4,
+      "idsNativosLegados": [
+        "mul8vmkb-2h7ndu6",
+        "mul8w6vi-sf1t2n2",
+        "mul90e3s-6dpwy96",
+        "mul90op2-i4qcpri",
+        "mul9qp3t-g326cri",
+        "mul9uw0o-70b2que",
+        "mul9v988-0jsnjg0",
+        "mul9vz4o-0wafwch",
+        "mul9wd42-0s6sb82",
+        "mul9wm7s-hqt591e",
+        "mul9xfz4-y4b50uy",
+        "mula91gp-idqrwbc",
+        "mulcyhuh-pqwh99h",
+        "mulk87dg-0htrvhu",
+        "mulk9p3r-p35nkc5",
+        "mulkgzho-riq4qx9"
+      ],
+      "quantidade": 18,
+      "mensagens": [
     {
       "id": "mul8vmkb-2h7ndu6",
       "comando": "bomdia",
@@ -107,9 +151,9 @@
       "tipo": "texto",
       "variacaoHorario": true,
       "mensagem": "",
-      "manha": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer ajudá-lo. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja um excelente dia!",
-      "tarde": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer ajudá-lo. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente tarde!",
-      "noite": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer ajudá-lo. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente noite!",
+      "manha": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer {{genero:ajudá-lo|ajudá-la}}. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja um excelente dia!",
+      "tarde": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer {{genero:ajudá-lo|ajudá-la}}. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente tarde!",
+      "noite": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer {{genero:ajudá-lo|ajudá-la}}. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente noite!",
       "templateVisita": ""
     },
     {
@@ -195,6 +239,65 @@
       "tarde": "",
       "noite": "",
       "templateVisita": ""
+    },
+    {
+      "id": "n2-enviarimagem",
+      "comando": "enviarimagem",
+      "categoria": "orientacoes",
+      "tipo": "imagem",
+      "arquivoImagem": "assets/mensagens/enviarimagem.png",
+      "variacaoHorario": false,
+      "mensagem": "",
+      "manha": "",
+      "tarde": "",
+      "noite": "",
+      "templateVisita": ""
+    },
+    {
+      "id": "n2-ocorrencia",
+      "comando": "ocorrencia",
+      "categoria": "orientacoes",
+      "tipo": "texto",
+      "variacaoHorario": false,
+      "mensagem": "Identificamos uma ocorrência na região e já temos uma equipe técnica atuando para realizar a correção.\n\nA previsão é que a situação seja normalizada em até 4 horas.\n\nAgradecemos pela compreensão durante esse período.",
+      "manha": "",
+      "tarde": "",
+      "noite": "",
+      "templateVisita": ""
     }
-  ]
+      ]
+    },
+    "sac": {
+      "versaoCatalogo": 3,
+      "idsNativosLegados": [],
+      "quantidade": 2,
+      "mensagens": [
+        {
+          "id": "sac-enviarimagem",
+          "comando": "enviarimagem",
+          "categoria": "orientacoes",
+          "tipo": "imagem",
+          "arquivoImagem": "assets/mensagens/enviarimagem.png",
+          "variacaoHorario": false,
+          "mensagem": "",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "sac-ocorrencia",
+          "comando": "ocorrencia",
+          "categoria": "orientacoes",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Identificamos uma ocorrência na região e já temos uma equipe técnica atuando para realizar a correção.\n\nA previsão é que a situação seja normalizada em até 4 horas.\n\nAgradecemos pela compreensão durante esse período.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        }
+      ]
+    }
+  }
 }

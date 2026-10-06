@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Way Tools",
-  "version": "0.6.9",
+  "version": "0.7.2",
   "description": "Ferramentas da Internet Way prontas para uso no navegador.",
   "minimum_chrome_version": "120",
   "permissions": [
@@ -41,6 +41,15 @@
       "matches": [
         "https://wayinternet.matrixdobrasil.ai/*"
       ]
+    },
+    {
+      "resources": [
+        "assets/mensagens/*.png"
+      ],
+      "matches": [
+        "https://ia-nocodb.internetway.com.br/*",
+        "https://wayinternet.matrixdobrasil.ai/*"
+      ]
     }
   ],
   "content_scripts": [
@@ -59,7 +68,10 @@
         "https://ia-nocodb.internetway.com.br/*"
       ],
       "js": [
+        "content/instance-coordinator.js",
         "config/default-messages.js",
+        "content/message-catalog-manager.js",
+        "content/message-experience.js",
         "config/scripts.js",
         "config/spelling-dictionary.js",
         "content/runtime.js",
@@ -67,6 +79,9 @@
         "content/spelling-engine.js",
         "scripts/way-mensagens.js",
         "scripts/way-corretor-ortografico-pro.js"
+      ],
+      "css": [
+        "styles/way-mensagens.css"
       ],
       "run_at": "document_start"
     },
@@ -95,6 +110,8 @@
       ],
       "js": [
         "config/default-messages.js",
+        "content/message-catalog-manager.js",
+        "content/message-experience.js",
         "config/scripts.js",
         "config/spelling-dictionary.js",
         "content/runtime.js",

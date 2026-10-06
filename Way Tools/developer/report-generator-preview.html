@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Estúdio do Gerador de Relato — Way Tools</title>
+    <link rel="stylesheet" href="report-generator-preview.css" />
+    <script src="report-generator-preview.js" defer></script>
+    <script src="../scripts/way-erp-gerador-relato.js" defer></script>
+  </head>
+  <body>
+    <header class="studio-header">
+      <div class="brand">
+        <img src="../128.png" alt="" aria-hidden="true" />
+        <div>
+          <span>WAY TOOLS • MODO DESENVOLVEDOR</span>
+          <h1>Estúdio do Gerador de Relato</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="reopen-generator" class="button primary" type="button">▶ Simular modal atual</button>
+        <button id="copy-json" class="button" type="button">Copiar JSON</button>
+        <button id="export-json" class="button success" type="button">Exportar JSON</button>
+      </div>
+    </header>
+
+    <section class="safety-notice" aria-labelledby="safety-title">
+      <span class="notice-icon" aria-hidden="true">🧪</span>
+      <div>
+        <strong id="safety-title">Laboratório isolado</strong>
+        <p>As edições abaixo criam uma proposta local, podem ser testadas no simulador e não alteram dados do ERP.</p>
+      </div>
+      <button id="reset-catalog" class="text-button danger" type="button">Restaurar catálogo do código</button>
+    </section>
+
+    <main class="studio-layout">
+      <aside class="stage-sidebar" aria-label="Etapas do gerador">
+        <div class="sidebar-heading">
+          <span>ETAPAS</span>
+          <strong id="stage-count">0</strong>
+        </div>
+        <nav id="stage-list" class="stage-list"></nav>
+        <div class="catalog-summary">
+          <span id="category-count">0 categorias</span>
+          <span id="option-count">0 opções</span>
+        </div>
+        <div id="catalog-audit" class="catalog-audit">Auditando referências…</div>
+      </aside>
+
+      <section class="editor-workspace" aria-labelledby="workspace-title">
+        <div class="workspace-heading">
+          <div>
+            <span class="eyebrow">ETAPA SELECIONADA</span>
+            <h2 id="workspace-title">Carregando catálogo…</h2>
+            <p id="workspace-description"></p>
+          </div>
+          <div class="workspace-actions">
+            <button id="edit-stage" class="button" type="button">Editar etapa</button>
+            <button id="add-category" class="button primary" type="button">＋ Nova categoria</button>
+          </div>
+        </div>
+
+        <label class="search-field">
+          <span>Buscar nesta etapa</span>
+          <input id="option-search" type="search" placeholder="Digite o nome de uma categoria ou opção" autocomplete="off" />
+        </label>
+
+        <div id="categories-list" class="categories-list" aria-live="polite"></div>
+        <p id="empty-state" class="empty-state" hidden>Nenhuma categoria ou opção corresponde à busca.</p>
+      </section>
+
+      <aside class="stage-preview" aria-labelledby="preview-title">
+        <div class="preview-heading">
+          <span class="eyebrow">VISUALIZAÇÃO</span>
+          <h2 id="preview-title">Prévia da etapa</h2>
+          <p>Representação simplificada da proposta editada.</p>
+        </div>
+        <div id="stage-preview-content" class="stage-preview-content"></div>
+      </aside>
+    </main>
+
+    <footer class="studio-footer">
+      <span id="studio-status" role="status" aria-live="polite">Aguardando o catálogo do gerador…</span>
+      <span>As alterações de desenvolvimento ficam salvas somente neste navegador.</span>
+    </footer>
+
+    <section class="simulator-sandbox" aria-hidden="true">
+      <div data-way-value="contrato">123456</div>
+      <div class="dx-htmleditor">
+        <div id="preview-editor" class="ql-editor dx-htmleditor-content" contenteditable="true" tabindex="-1">
+          <p>Nome: Cliente de Teste Way</p>
+          <p>Telefone: (14) 99999-9999</p>
+          <p>Protocolo: 2580000000000000</p>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="catalog-editor-dialog" class="catalog-dialog">
+      <form id="catalog-editor-form" method="dialog">
+        <header>
+          <div>
+            <span class="eyebrow">EDITOR DO CATÁLOGO</span>
+            <h2 id="dialog-title">Editar item</h2>
+          </div>
+          <button id="close-dialog" class="icon-button" type="button" aria-label="Fechar">×</button>
+        </header>
+        <input id="editor-kind" type="hidden" />
+        <input id="editor-category-index" type="hidden" />
+        <input id="editor-option-index" type="hidden" />
+        <div class="dialog-fields">
+          <label>
+            <span>Identificador técnico</span>
+            <input id="editor-id" type="text" maxlength="100" placeholder="ex.: teste_velocidade" required />
+            <small>Use letras, números, hífen ou sublinhado. O ID será incluído no JSON.</small>
+          </label>
+          <label>
+            <span>Nome exibido</span>
+            <input id="editor-label" type="text" maxlength="240" required />
+          </label>
+          <label id="editor-icon-field">
+            <span>Ícone opcional</span>
+            <input id="editor-icon" type="text" maxlength="20" placeholder="Ex.: 🌐" />
+          </label>
+          <label>
+            <span>Descrição opcional</span>
+            <textarea id="editor-description" rows="3" maxlength="800"></textarea>
+          </label>
+          <label id="editor-order-field">
+            <span>Ordem normal de exibição</span>
+            <input id="editor-order" type="number" min="-99999" max="99999" step="1" />
+            <small>Os menores números aparecem primeiro. Exemplo: 10, 20, 30.</small>
+          </label>
+          <section id="editor-relations-field" class="relations-editor" aria-labelledby="relations-title">
+            <div class="relations-heading">
+              <div>
+                <strong id="relations-title">Quando esta opção deve aparecer?</strong>
+                <p>Marque as escolhas que ativam esta opção. Não é necessário editar código.</p>
+              </div>
+              <span>VÍNCULOS VISUAIS</span>
+            </div>
+            <div id="editor-priority-group" class="priority-settings">
+              <label class="priority-toggle">
+                <input id="editor-priority-enabled" type="checkbox" />
+                <span>
+                  <strong>Destacar como prioritária quando estiver disponível</strong>
+                  <small>Novas opções começam com esta escolha marcada. Se desmarcar, os vínculos continuam funcionando sem promover a opção.</small>
+                </span>
+              </label>
+              <label id="editor-priority-order-field" class="priority-order-field">
+                <span>Ordem entre as prioritárias</span>
+                <input id="editor-priority-order" type="number" min="-99999" max="99999" step="1" />
+                <small>Também aqui, o menor número aparece primeiro.</small>
+              </label>
+            </div>
+            <div id="relation-products-group" class="relation-group">
+              <h3>Produtos envolvidos</h3>
+              <p>Escolha “Qualquer produto” ou marque produtos específicos.</p>
+              <div id="relation-products-options" class="relation-options"></div>
+            </div>
+            <div id="relation-contacts-group" class="relation-group">
+              <h3>Motivo do contato</h3>
+              <p>Defina em quais tipos de atendimento a opção estará disponível.</p>
+              <div id="relation-contacts-options" class="relation-options"></div>
+            </div>
+            <div id="relation-requests-group" class="relation-group">
+              <h3>Solicitações que ativam esta opção</h3>
+              <p>Exemplo: vincule uma verificação à troca de senha ou alteração do nome do Wi-Fi.</p>
+              <div id="relation-requests-options" class="relation-options"></div>
+            </div>
+            <div id="relation-issues-group" class="relation-group">
+              <h3>Problemas que ativam esta opção</h3>
+              <p>A opção será disponibilizada quando um dos problemas marcados fizer parte da rota.</p>
+              <div id="relation-issues-options" class="relation-options"></div>
+            </div>
+            <p class="relations-note">Dentro de cada grupo, basta uma opção marcada corresponder. Quando você preencher mais de um grupo, todos os grupos preenchidos precisam corresponder à rota.</p>
+          </section>
+          <details id="editor-metadata-field" class="advanced-editor">
+            <summary>Configurações avançadas em JSON</summary>
+            <label>
+              <span>Propriedades adicionais</span>
+              <textarea id="editor-metadata" class="code-field" rows="9" spellcheck="false" placeholder='{"placeholder":"Ex.: informação adicional"}'></textarea>
+              <small>Use somente para propriedades que ainda não possuem um campo visual acima.</small>
+            </label>
+          </details>
+        </div>
+        <p id="dialog-error" class="dialog-error" role="alert" hidden></p>
+        <footer>
+          <button id="cancel-editor" class="button" type="button">Cancelar</button>
+          <button class="button primary" type="submit">Salvar alteração</button>
+        </footer>
+      </form>
+    </dialog>
+  </body>
+</html>

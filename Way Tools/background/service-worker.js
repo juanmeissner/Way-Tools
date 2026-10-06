@@ -4,6 +4,8 @@ const CHATWOOT_ORIGIN = "https://ia-nocodb.internetway.com.br";
 const MESSAGE_TYPE = "wayTools:iaMessageNotification";
 const INACTIVITY_SYNC_TYPE = "wayTools:syncChatwootInactivity";
 const INACTIVITY_CANCEL_TYPE = "wayTools:cancelChatwootInactivity";
+const INACTIVITY_RECONCILE_TYPE = "wayTools:reconcileChatwootInactivity";
+const NOTIFICATION_OWNER_TYPE = "wayTools:setChatwootNotificationOwner";
 const DESTINATION_PREFIX = "wayTools.notificationDestination.";
 const EXPIRATION_PREFIX = "wayTools.notificationExpiration.";
 const CLEAR_ALARM_PREFIX = "wayTools.clearNotification.";
@@ -11,6 +13,13 @@ const INACTIVITY_STATE_PREFIX = "wayTools.chatwootInactivityState.";
 const INACTIVITY_ALARM_PREFIX = "wayTools.chatwootInactivityAlarm.";
 const DURATION_STORAGE_KEY = "wayTools.notifications.duration";
 const NOTIFY_WHEN_FOCUSED_STORAGE_KEY = "wayTools.notifications.whenFocused";
+const NOTIFICATION_OWNER_SESSION_KEY = "wayTools.chatwootNotificationOwner.enabled";
+const N2_MESSAGE_CATALOG_STORAGE_KEY = "wayTools.shared.messages.catalog.n2.v1";
+const LEGACY_MESSAGE_CATALOG_STORAGE_KEYS = Object.freeze([
+  "wayTools.shared.messages.catalog.v1",
+  "wayTools.data.way-mensagens.way-mensagens-personalizadas-v1",
+  "wayTools.data.matrix-mensagens.way-matrix-mensagens-personalizadas-v1"
+]);
 const DEFAULT_DURATION = "5";
 const ALLOWED_DURATIONS = new Set(["disabled", "windows", "1", "2", "5", "10", "30", "60", "persistent"]);
 const recentFingerprints = new Map();
@@ -62,6 +71,29 @@ function isAllowedDestination(url) {
   } catch {
     return false;
   }
+}
+
+async function migrateLegacyMessageCatalog() {
+  const stored = await chrome.storage.local.get([
+    N2_MESSAGE_CATALOG_STORAGE_KEY,
+    ...LEGACY_MESSAGE_CATALOG_STORAGE_KEYS
+  ]);
+
+  if (Array.isArray(stored[N2_MESSAGE_CATALOG_STORAGE_KEY])) {
+    return;
+  }
+
+  const legacyCatalog = LEGACY_MESSAGE_CATALOG_STORAGE_KEYS
+    .map((key) => stored[key])
+    .find((catalog) => Array.isArray(catalog));
+
+  if (!legacyCatalog) {
+    return;
+  }
+
+  await chrome.storage.local.set({
+    [N2_MESSAGE_CATALOG_STORAGE_KEY]: legacyCatalog
+  });
 }
 
 function clearExpiredFingerprints(now) {
@@ -326,12 +358,28 @@ async function scheduleConversationInactivity(message, sender) {
     return { ok: false, error: "Origem não autorizada." };
   }
 
+  if (!await isNotificationOwnerEnabled()) {
+    return { ok: true, scheduled: false, reason: "duplicate-installation" };
+  }
+
   const accountId = normalizePositiveInteger(message?.conversation?.accountId);
   const conversationId = normalizePositiveInteger(message?.conversation?.conversationId);
   const lastActivityAt = normalizeTimestamp(message?.conversation?.lastActivityAt);
 
   if (!accountId || !conversationId || !lastActivityAt) {
     return { ok: false, error: "Conversa ou horário de atividade inválido." };
+  }
+
+  const requireAgentLastMessage = message.requireAgentLastMessage !== false;
+  const lastMessageFromAgent = message?.conversation?.lastMessageFromAgent === true;
+
+  if (requireAgentLastMessage && !lastMessageFromAgent) {
+    await clearConversationInactivity(accountId, conversationId);
+    return {
+      ok: true,
+      scheduled: false,
+      reason: "last-message-not-from-agent"
+    };
   }
 
   const levels = normalizeInactivityLevels(message.levels);
@@ -375,6 +423,8 @@ async function scheduleConversationInactivity(message, sender) {
       ? normalizeText(message.conversation.url, 2_000)
       : sender.url,
     lastActivityAt,
+    lastMessageFromAgent,
+    requireAgentLastMessage,
     levels,
     notifiedLevels
   };
@@ -400,6 +450,114 @@ async function cancelConversationInactivity(message, sender) {
 
   await clearConversationInactivity(accountId, conversationId);
   return { ok: true, cancelled: true };
+}
+
+async function reconcileConversationInactivity(message, sender) {
+  if (!isTrustedSender(sender)) {
+    return { ok: false, error: "Origem não autorizada." };
+  }
+
+  const accountId = normalizePositiveInteger(message.accountId);
+
+  if (!accountId || !Array.isArray(message.conversationIds)) {
+    return { ok: false, error: "Lista de conversas inválida." };
+  }
+
+  const assignedConversationIds = new Set(
+    message.conversationIds
+      .map(normalizePositiveInteger)
+      .filter(Boolean)
+  );
+  const stored = await chrome.storage.session.get(null).catch(() => ({}));
+  const accountPrefix = `${INACTIVITY_STATE_PREFIX}${accountId}.`;
+  const staleConversationIds = Object.keys(stored)
+    .filter((key) => key.startsWith(accountPrefix))
+    .map((key) => normalizePositiveInteger(key.slice(accountPrefix.length)))
+    .filter((conversationId) =>
+      conversationId && !assignedConversationIds.has(conversationId)
+    );
+
+  await Promise.all(
+    staleConversationIds.map((conversationId) =>
+      clearConversationInactivity(accountId, conversationId)
+    )
+  );
+
+  return {
+    ok: true,
+    reconciled: true,
+    removed: staleConversationIds.length
+  };
+}
+
+async function isNotificationOwnerEnabled() {
+  const stored = await chrome.storage.session
+    .get(NOTIFICATION_OWNER_SESSION_KEY)
+    .catch(() => ({}));
+
+  return stored[NOTIFICATION_OWNER_SESSION_KEY] !== false;
+}
+
+async function clearNotificationArtifactsForThisInstallation() {
+  const [stored, alarms, notifications] = await Promise.all([
+    chrome.storage.session.get(null).catch(() => ({})),
+    typeof chrome.alarms.getAll === "function"
+      ? chrome.alarms.getAll().catch(() => [])
+      : Promise.resolve([]),
+    chrome.notifications.getAll().catch(() => ({}))
+  ]);
+  const artifactKeys = Object.keys(stored).filter((key) =>
+    key.startsWith(INACTIVITY_STATE_PREFIX) ||
+    key.startsWith(DESTINATION_PREFIX) ||
+    key.startsWith(EXPIRATION_PREFIX)
+  );
+  const alarmNames = alarms
+    .map((alarm) => alarm?.name)
+    .filter((name) =>
+      typeof name === "string" &&
+      (name.startsWith(INACTIVITY_ALARM_PREFIX) || name.startsWith(CLEAR_ALARM_PREFIX))
+    );
+  const notificationIds = Object.keys(notifications).filter((id) =>
+    id.startsWith("way-tools-ia-")
+  );
+
+  for (const timeoutId of autoClearTimeouts.values()) {
+    clearTimeout(timeoutId);
+  }
+  autoClearTimeouts.clear();
+  recentFingerprints.clear();
+
+  await Promise.allSettled([
+    ...alarmNames.map((name) => chrome.alarms.clear(name)),
+    ...notificationIds.map((id) => chrome.notifications.clear(id)),
+    artifactKeys.length > 0
+      ? chrome.storage.session.remove(artifactKeys)
+      : Promise.resolve()
+  ]);
+
+  return {
+    alarms: alarmNames.length,
+    notifications: notificationIds.length,
+    storageEntries: artifactKeys.length
+  };
+}
+
+async function setNotificationOwnerState(message, sender) {
+  if (!isTrustedSender(sender)) {
+    return { ok: false, error: "Origem não autorizada." };
+  }
+
+  const enabled = message.enabled === true;
+  await chrome.storage.session.set({
+    [NOTIFICATION_OWNER_SESSION_KEY]: enabled
+  });
+
+  if (enabled) {
+    return { ok: true, enabled: true };
+  }
+
+  const cleared = await clearNotificationArtifactsForThisInstallation();
+  return { ok: true, enabled: false, cleared };
 }
 
 async function chatwootTabIsForeground(tabId) {
@@ -455,12 +613,22 @@ async function handleInactivityAlarm(alarm) {
     return false;
   }
 
+  if (!await isNotificationOwnerEnabled()) {
+    await clearConversationInactivity(parsed.accountId, parsed.conversationId);
+    return true;
+  }
+
   const key = inactivityStateKey(parsed.accountId, parsed.conversationId);
   const stored = await chrome.storage.session.get(key);
   const state = stored[key];
   const configuration = state?.levels?.[parsed.level];
 
-  if (!state || !configuration?.enabled || state.notifiedLevels?.[parsed.level]) {
+  if (
+    !state ||
+    !configuration?.enabled ||
+    state.notifiedLevels?.[parsed.level] ||
+    state.requireAgentLastMessage !== false && state.lastMessageFromAgent !== true
+  ) {
     return true;
   }
 
@@ -497,6 +665,10 @@ async function handleInactivityAlarm(alarm) {
 }
 
 async function performRestoreInactivitySchedules() {
+  if (!await isNotificationOwnerEnabled()) {
+    return;
+  }
+
   let stored;
 
   try {
@@ -509,6 +681,11 @@ async function performRestoreInactivitySchedules() {
 
   for (const [key, state] of Object.entries(stored)) {
     if (!key.startsWith(INACTIVITY_STATE_PREFIX)) {
+      continue;
+    }
+
+    if (state.requireAgentLastMessage !== false && state.lastMessageFromAgent !== true) {
+      await clearConversationInactivity(state.accountId, state.conversationId);
       continue;
     }
 
@@ -555,6 +732,10 @@ async function restoreInactivitySchedules() {
 async function createNotification(message, sender) {
   if (!isTrustedSender(sender)) {
     return { ok: false, error: "Origem não autorizada." };
+  }
+
+  if (!await isNotificationOwnerEnabled()) {
+    return { ok: true, suppressed: true, reason: "duplicate-installation" };
   }
 
   const duration = await getNotificationDuration();
@@ -627,12 +808,16 @@ async function createNotification(message, sender) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   let operation;
 
-  if (message?.type === MESSAGE_TYPE) {
+  if (message?.type === NOTIFICATION_OWNER_TYPE) {
+    operation = setNotificationOwnerState(message, sender);
+  } else if (message?.type === MESSAGE_TYPE) {
     operation = createNotification(message, sender);
   } else if (message?.type === INACTIVITY_SYNC_TYPE) {
     operation = scheduleConversationInactivity(message, sender);
   } else if (message?.type === INACTIVITY_CANCEL_TYPE) {
     operation = cancelConversationInactivity(message, sender);
+  } else if (message?.type === INACTIVITY_RECONCILE_TYPE) {
+    operation = reconcileConversationInactivity(message, sender);
   } else {
     return false;
   }
@@ -716,14 +901,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  void migrateLegacyMessageCatalog();
   void restoreAutoCloseSchedules();
   void restoreInactivitySchedules();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  void migrateLegacyMessageCatalog();
   void restoreAutoCloseSchedules();
   void restoreInactivitySchedules();
 });
 
+void migrateLegacyMessageCatalog();
 void restoreAutoCloseSchedules();
 void restoreInactivitySchedules();

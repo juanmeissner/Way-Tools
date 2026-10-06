@@ -2,202 +2,465 @@
 (() => {
   "use strict";
 
-  const messages = [
-  {
-    "id": "mul8vmkb-2h7ndu6",
-    "comando": "bomdia",
-    "categoria": "abertura",
-    "tipo": "texto",
-    "variacaoHorario": true,
-    "mensagem": "",
-    "manha": "Bom dia! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Suporte Especializado da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?",
-    "tarde": "Boa tarde! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Suporte Especializado da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?",
-    "noite": "Boa noite! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Suporte Especializado da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul8w6vi-sf1t2n2",
-    "comando": "diagnostico",
-    "categoria": "diagnostico",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Para que eu possa entender melhor o que está acontecendo com a sua conexão, poderia me explicar **Como o problema está ocorrendo**?\n\nSe possível, me informe se a dificuldade acontece:\n• Em alguma rede Wi-Fi específica, **2,4 GHz ou 5 GHz**;\n• Em algum **site ou aplicativo** específico;\n• Em apenas um **dispositivo** ou em vários aparelhos.\n\nCom essas informações, consigo direcionar melhor a análise e identificar a possível causa do problema.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul90e3s-6dpwy96",
-    "comando": "ajustar",
-    "categoria": "diagnostico",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Certo! Vou realizar uma **análise completa da sua conexão**, verificando as configurações do roteador e os níveis de sinal da fibra.\n\nTambém farei os **ajustes necessários**, caso sejam identificados pontos que possam ser otimizados. Após a análise, retorno com as informações para darmos continuidade ao atendimento. 😊",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul90op2-i4qcpri",
-    "comando": "ajustes",
-    "categoria": "ajustes",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Realizei alguns **ajustes nas configurações do roteador** com o objetivo de melhorar a **estabilidade e o desempenho da sua conexão**. ✅\n\nPor gentileza, realize alguns testes de navegação e utilização da internet e me informe se percebeu **melhora no funcionamento da conexão**.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9qp3t-g326cri",
-    "comando": "agenda",
-    "categoria": "agendamento",
-    "tipo": "disponibilidade",
-    "variacaoHorario": false,
-    "mensagem": "",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9uw0o-70b2que",
-    "comando": "dez",
-    "categoria": "ausencia",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Você ainda está por aí?\nPreciso do seu retorno para dar continuidade ao atendimento.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9v988-0jsnjg0",
-    "comando": "quin",
-    "categoria": "ausencia",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Oi, você ainda está por aí? \nVou aguardar mais 5 minutos. Caso não tenha retorno, vou pausar nossa conversa. Quando você responder, seguimos de onde paramos.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9vz4o-0wafwch",
-    "comando": "serviconormal",
-    "categoria": "encerramento",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Agora que o serviço está **normalizado**, podemos encerrar este atendimento ou há mais alguma coisa em que eu possa ajudá-lo? 😊",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9wd42-0s6sb82",
-    "comando": "agradecimento",
-    "categoria": "encerramento",
-    "tipo": "texto",
-    "variacaoHorario": true,
-    "mensagem": "",
-    "manha": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer ajudá-lo. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja um excelente dia!",
-    "tarde": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer ajudá-lo. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente tarde!",
-    "noite": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer ajudá-lo. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente noite!",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9wm7s-hqt591e",
-    "comando": "pesquisa",
-    "categoria": "encerramento",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Ao final deste atendimento, você receberá uma **breve pesquisa de satisfação**.\n\nSua avaliação é muito importante para nós, pois nos ajuda a **aprimorar continuamente a qualidade dos nossos serviços e atendimentos**. Contamos com a sua participação! 😊",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mul9xfz4-y4b50uy",
-    "comando": "selfie",
-    "categoria": "documentos",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Para darmos continuidade à solicitação, precisamos realizar algumas etapas de segurança:\n\n📸 **Validação de identidade**\nPor gentileza, envie uma selfie do titular do contrato segurando um documento de identificação ao lado do rosto, de forma que o rosto e o documento estejam visíveis e legíveis.\n\n🔐 **Criação de senha**\nTambém será necessário criar uma senha com no mínimo 8 caracteres, contendo obrigatoriamente:\n• Letra maiúscula (A–Z)\n• Letra minúscula (a–z)\n• Número (0–9)\n• Caractere especial (ex.: @, #, !, $)\n\n**Após o envio da selfie e da nova senha, poderemos dar continuidade à solicitação.**",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mula91gp-idqrwbc",
-    "comando": "diferencarede",
-    "categoria": "orientacoes",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "📶 A rede **2,4 GHz** possui **maior alcance** e consegue atravessar paredes e obstáculos com mais facilidade, porém oferece velocidades menores. É mais indicada para dispositivos que ficam **mais distantes do roteador**, como câmeras, impressoras e aparelhos inteligentes.\n\n🚀 Já a rede **5 GHz** oferece **maior velocidade** e, geralmente, sofre menos interferências, porém possui um alcance menor. Por isso, é mais indicada para dispositivos **próximos ao roteador**, como TVs, notebooks, celulares e videogames.\n\n💡 **Resumindo:** mais distante do roteador → **2,4 GHz** | mais próximo e precisa de maior velocidade → **5 GHz**.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mulcyhuh-pqwh99h",
-    "comando": "visita",
-    "categoria": "agendamento",
-    "tipo": "visita",
-    "variacaoHorario": false,
-    "mensagem": "",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": "✅ **Visita Técnica Agendada com Sucesso**\n\n👤 **Nome:** {{nomecliente}}\n📍 **Endereço:** {{endereco}}\n📅 **Dia:** {{data}}\n🌤️ **Período:** {{periodo}}\n📱 **Telefone:** {{telefone}}\n🕐 **Previsão de atendimento:** {{horario}}\n🔢 **Protocolo:** {{protocolo}}\n\n📲 **Confirmação da visita**\nO setor de agendamento enviará uma mensagem via **WhatsApp** para confirmar a visita. **É importante responder à mensagem** para que o agendamento seja validado.\n\n🚗 **Deslocamento do técnico**\nAssim que o técnico iniciar o deslocamento até o endereço, você receberá um **SMS** com a **placa e os dados do veículo** do profissional responsável pela execução da ordem de serviço.\n\n⚠️ **Importante:**\nÉ necessário que haja **uma pessoa maior de 18 anos no local** para receber o técnico.\n\n🔄 **Precisa reagendar?**\nCaso não possa receber o técnico no período agendado, basta responder à mensagem de confirmação enviada pelo WhatsApp solicitando um novo horário ou entrar em contato com nossa equipe.\n\nEstamos à disposição e teremos prazer em atendê-lo! 😊"
-  },
-  {
-    "id": "mulk87dg-0htrvhu",
-    "comando": "sinalatenuado",
-    "categoria": "orientacoes",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "\"Sinal atenuado\" significa que o sinal de internet está chegando fraco ou com perda de intensidade até o seu equipamento.\n\nIsso pode acontecer por diversos motivos, como conexões ou cabos com defeito, emendas, sujeira nos conectores, distância até o ponto de distribuição ou interferências no percurso da fibra.\n\nQuando o sinal está atenuado, a conexão pode ficar lenta, instável ou até cair em alguns momentos — por isso é importante que o técnico verifique no local para corrigir e normalizar o sinal.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mulk9p3r-p35nkc5",
-    "comando": "testvelocidadeexplica",
-    "categoria": "velocidade",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Para realizarmos o **teste de velocidade** da forma mais precisa possível, pedimos, por gentileza, que desconecte temporariamente os demais dispositivos da rede, se possível, para evitar interferências no resultado.\n\n💻 **Preferencialmente:** realize o teste em um computador conectado diretamente ao roteador por **cabo de rede**, pois essa é a forma mais adequada para verificarmos a velocidade entregue.\n\n📶 **Caso não seja possível utilizar o cabo:** faça o teste próximo ao roteador, conectado à rede **Wi-Fi 5 GHz**, utilizando apenas o dispositivo que realizará o teste.\n\n⚠️ **Importante:** a velocidade apresentada também pode variar de acordo com a capacidade do aparelho utilizado, pois celulares, computadores e outros dispositivos possuem diferentes limitações de conexão.\n\nApós realizar o teste, por favor, nos informe o **resultado obtido** para darmos continuidade à análise.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  },
-  {
-    "id": "mulkgzho-riq4qx9",
-    "comando": "encerra",
-    "categoria": "encerramento",
-    "tipo": "texto",
-    "variacaoHorario": false,
-    "mensagem": "Se houver qualquer novo problema ou dúvida, estamos à disposição para ajudá-lo novamente.",
-    "manha": "",
-    "tarde": "",
-    "noite": "",
-    "templateVisita": ""
-  }
-];
+  function deepFreeze(value) {
+    if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+      return value;
+    }
 
-  globalThis.WAY_TOOLS_NATIVE_MESSAGES = Object.freeze(
-    messages.map((message) => Object.freeze(message))
-  );
+    Object.freeze(value);
+    Object.values(value).forEach(deepFreeze);
+    return value;
+  }
+
+  const catalog = deepFreeze({
+  "schemaVersion": 2,
+  "backupVersion": 10,
+  "categories": [
+    {
+      "id": "abertura",
+      "label": "👋 Abertura de atendimento",
+      "ordem": 10,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    },
+    {
+      "id": "identificacao",
+      "label": "🪪 Identificação e segurança",
+      "ordem": 20,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "diagnostico",
+      "label": "🔎 Diagnóstico inicial",
+      "ordem": 30,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    },
+    {
+      "id": "financeiro",
+      "label": "💳 Financeiro",
+      "ordem": 40,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "cadastro",
+      "label": "📝 Cadastro",
+      "ordem": 50,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "contrato",
+      "label": "📑 Contrato",
+      "ordem": 60,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "planos",
+      "label": "📦 Planos e serviços",
+      "ordem": 70,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "solicitacoes",
+      "label": "📋 Solicitações",
+      "ordem": 80,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "encaminhamento",
+      "label": "↗️ Encaminhamentos",
+      "ordem": 90,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "acompanhamento",
+      "label": "🔄 Acompanhamento",
+      "ordem": 100,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "ajustes",
+      "label": "🛠️ Ajustes na conexão",
+      "ordem": 110,
+      "setores": [
+        "n2"
+      ]
+    },
+    {
+      "id": "velocidade",
+      "label": "🚀 Teste de velocidade",
+      "ordem": 120,
+      "setores": [
+        "n2"
+      ]
+    },
+    {
+      "id": "iptv",
+      "label": "📺 IPTV",
+      "ordem": 130,
+      "setores": [
+        "n2"
+      ]
+    },
+    {
+      "id": "cameras",
+      "label": "🎥 Câmeras",
+      "ordem": 140,
+      "setores": [
+        "n2"
+      ]
+    },
+    {
+      "id": "agendamento",
+      "label": "📅 Agendamento de visita técnica",
+      "ordem": 150,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    },
+    {
+      "id": "documentos",
+      "label": "📄 Solicitação de documentos",
+      "ordem": 160,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    },
+    {
+      "id": "orientacoes",
+      "label": "📡 Orientações",
+      "ordem": 170,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    },
+    {
+      "id": "cancelamento",
+      "label": "🛑 Cancelamento e retenção",
+      "ordem": 180,
+      "setores": [
+        "sac"
+      ]
+    },
+    {
+      "id": "ausencia",
+      "label": "⏳ Gestão de ausência",
+      "ordem": 190,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    },
+    {
+      "id": "encerramento",
+      "label": "✅ Encerramento de atendimento",
+      "ordem": 200,
+      "setores": [
+        "n2",
+        "sac"
+      ]
+    }
+  ],
+  "profiles": {
+    "n2": {
+      "version": 4,
+      "legacyNativeIds": [
+        "mul8vmkb-2h7ndu6",
+        "mul8w6vi-sf1t2n2",
+        "mul90e3s-6dpwy96",
+        "mul90op2-i4qcpri",
+        "mul9qp3t-g326cri",
+        "mul9uw0o-70b2que",
+        "mul9v988-0jsnjg0",
+        "mul9vz4o-0wafwch",
+        "mul9wd42-0s6sb82",
+        "mul9wm7s-hqt591e",
+        "mul9xfz4-y4b50uy",
+        "mula91gp-idqrwbc",
+        "mulcyhuh-pqwh99h",
+        "mulk87dg-0htrvhu",
+        "mulk9p3r-p35nkc5",
+        "mulkgzho-riq4qx9"
+      ],
+      "messages": [
+        {
+          "id": "mul8vmkb-2h7ndu6",
+          "comando": "bomdia",
+          "categoria": "abertura",
+          "tipo": "texto",
+          "variacaoHorario": true,
+          "mensagem": "",
+          "manha": "Bom dia! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Suporte Especializado da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?",
+          "tarde": "Boa tarde! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Suporte Especializado da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?",
+          "noite": "Boa noite! 😊 Tudo bem?\n\nMeu nome é **{{nome}}** e faço parte da equipe de **Suporte Especializado da Way**. Será um prazer lhe atender!\n\nPara começarmos, poderia me informar, por gentileza, com quem eu falo?",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul8w6vi-sf1t2n2",
+          "comando": "diagnostico",
+          "categoria": "diagnostico",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Para que eu possa entender melhor o que está acontecendo com a sua conexão, poderia me explicar **Como o problema está ocorrendo**?\n\nSe possível, me informe se a dificuldade acontece:\n• Em alguma rede Wi-Fi específica, **2,4 GHz ou 5 GHz**;\n• Em algum **site ou aplicativo** específico;\n• Em apenas um **dispositivo** ou em vários aparelhos.\n\nCom essas informações, consigo direcionar melhor a análise e identificar a possível causa do problema.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul90e3s-6dpwy96",
+          "comando": "ajustar",
+          "categoria": "diagnostico",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Certo! Vou realizar uma **análise completa da sua conexão**, verificando as configurações do roteador e os níveis de sinal da fibra.\n\nTambém farei os **ajustes necessários**, caso sejam identificados pontos que possam ser otimizados. Após a análise, retorno com as informações para darmos continuidade ao atendimento. 😊",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul90op2-i4qcpri",
+          "comando": "ajustes",
+          "categoria": "ajustes",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Realizei alguns **ajustes nas configurações do roteador** com o objetivo de melhorar a **estabilidade e o desempenho da sua conexão**. ✅\n\nPor gentileza, realize alguns testes de navegação e utilização da internet e me informe se percebeu **melhora no funcionamento da conexão**.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9qp3t-g326cri",
+          "comando": "agenda",
+          "categoria": "agendamento",
+          "tipo": "disponibilidade",
+          "variacaoHorario": false,
+          "mensagem": "",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9uw0o-70b2que",
+          "comando": "dez",
+          "categoria": "ausencia",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Você ainda está por aí?\nPreciso do seu retorno para dar continuidade ao atendimento.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9v988-0jsnjg0",
+          "comando": "quin",
+          "categoria": "ausencia",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Oi, você ainda está por aí? \nVou aguardar mais 5 minutos. Caso não tenha retorno, vou pausar nossa conversa. Quando você responder, seguimos de onde paramos.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9vz4o-0wafwch",
+          "comando": "serviconormal",
+          "categoria": "encerramento",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Agora que o serviço está **normalizado**, podemos encerrar este atendimento ou há mais alguma coisa em que eu possa ajudá-lo? 😊",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9wd42-0s6sb82",
+          "comando": "agradecimento",
+          "categoria": "encerramento",
+          "tipo": "texto",
+          "variacaoHorario": true,
+          "mensagem": "",
+          "manha": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer {{genero:ajudá-lo|ajudá-la}}. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja um excelente dia!",
+          "tarde": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer {{genero:ajudá-lo|ajudá-la}}. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente tarde!",
+          "noite": "Agradecemos pelo seu contato e pela confiança em nosso atendimento! 😊\n\nFoi um prazer {{genero:ajudá-lo|ajudá-la}}. Caso precise de qualquer suporte ou tenha alguma dúvida, nossa equipe permanece à disposição através dos canais de atendimento.\n\n💙 A Way Internet agradece e deseja uma excelente noite!",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9wm7s-hqt591e",
+          "comando": "pesquisa",
+          "categoria": "encerramento",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Ao final deste atendimento, você receberá uma **breve pesquisa de satisfação**.\n\nSua avaliação é muito importante para nós, pois nos ajuda a **aprimorar continuamente a qualidade dos nossos serviços e atendimentos**. Contamos com a sua participação! 😊",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mul9xfz4-y4b50uy",
+          "comando": "selfie",
+          "categoria": "documentos",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Para darmos continuidade à solicitação, precisamos realizar algumas etapas de segurança:\n\n📸 **Validação de identidade**\nPor gentileza, envie uma selfie do titular do contrato segurando um documento de identificação ao lado do rosto, de forma que o rosto e o documento estejam visíveis e legíveis.\n\n🔐 **Criação de senha**\nTambém será necessário criar uma senha com no mínimo 8 caracteres, contendo obrigatoriamente:\n• Letra maiúscula (A–Z)\n• Letra minúscula (a–z)\n• Número (0–9)\n• Caractere especial (ex.: @, #, !, $)\n\n**Após o envio da selfie e da nova senha, poderemos dar continuidade à solicitação.**",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mula91gp-idqrwbc",
+          "comando": "diferencarede",
+          "categoria": "orientacoes",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "📶 A rede **2,4 GHz** possui **maior alcance** e consegue atravessar paredes e obstáculos com mais facilidade, porém oferece velocidades menores. É mais indicada para dispositivos que ficam **mais distantes do roteador**, como câmeras, impressoras e aparelhos inteligentes.\n\n🚀 Já a rede **5 GHz** oferece **maior velocidade** e, geralmente, sofre menos interferências, porém possui um alcance menor. Por isso, é mais indicada para dispositivos **próximos ao roteador**, como TVs, notebooks, celulares e videogames.\n\n💡 **Resumindo:** mais distante do roteador → **2,4 GHz** | mais próximo e precisa de maior velocidade → **5 GHz**.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mulcyhuh-pqwh99h",
+          "comando": "visita",
+          "categoria": "agendamento",
+          "tipo": "visita",
+          "variacaoHorario": false,
+          "mensagem": "",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": "✅ **Visita Técnica Agendada com Sucesso**\n\n👤 **Nome:** {{nomecliente}}\n📍 **Endereço:** {{endereco}}\n📅 **Dia:** {{data}}\n🌤️ **Período:** {{periodo}}\n📱 **Telefone:** {{telefone}}\n🕐 **Previsão de atendimento:** {{horario}}\n🔢 **Protocolo:** {{protocolo}}\n\n📲 **Confirmação da visita**\nO setor de agendamento enviará uma mensagem via **WhatsApp** para confirmar a visita. **É importante responder à mensagem** para que o agendamento seja validado.\n\n🚗 **Deslocamento do técnico**\nAssim que o técnico iniciar o deslocamento até o endereço, você receberá um **SMS** com a **placa e os dados do veículo** do profissional responsável pela execução da ordem de serviço.\n\n⚠️ **Importante:**\nÉ necessário que haja **uma pessoa maior de 18 anos no local** para receber o técnico.\n\n🔄 **Precisa reagendar?**\nCaso não possa receber o técnico no período agendado, basta responder à mensagem de confirmação enviada pelo WhatsApp solicitando um novo horário ou entrar em contato com nossa equipe.\n\nEstamos à disposição e teremos prazer em atendê-lo! 😊"
+        },
+        {
+          "id": "mulk87dg-0htrvhu",
+          "comando": "sinalatenuado",
+          "categoria": "orientacoes",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "\"Sinal atenuado\" significa que o sinal de internet está chegando fraco ou com perda de intensidade até o seu equipamento.\n\nIsso pode acontecer por diversos motivos, como conexões ou cabos com defeito, emendas, sujeira nos conectores, distância até o ponto de distribuição ou interferências no percurso da fibra.\n\nQuando o sinal está atenuado, a conexão pode ficar lenta, instável ou até cair em alguns momentos — por isso é importante que o técnico verifique no local para corrigir e normalizar o sinal.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mulk9p3r-p35nkc5",
+          "comando": "testvelocidadeexplica",
+          "categoria": "velocidade",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Para realizarmos o **teste de velocidade** da forma mais precisa possível, pedimos, por gentileza, que desconecte temporariamente os demais dispositivos da rede, se possível, para evitar interferências no resultado.\n\n💻 **Preferencialmente:** realize o teste em um computador conectado diretamente ao roteador por **cabo de rede**, pois essa é a forma mais adequada para verificarmos a velocidade entregue.\n\n📶 **Caso não seja possível utilizar o cabo:** faça o teste próximo ao roteador, conectado à rede **Wi-Fi 5 GHz**, utilizando apenas o dispositivo que realizará o teste.\n\n⚠️ **Importante:** a velocidade apresentada também pode variar de acordo com a capacidade do aparelho utilizado, pois celulares, computadores e outros dispositivos possuem diferentes limitações de conexão.\n\nApós realizar o teste, por favor, nos informe o **resultado obtido** para darmos continuidade à análise.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "mulkgzho-riq4qx9",
+          "comando": "encerra",
+          "categoria": "encerramento",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Se houver qualquer novo problema ou dúvida, estamos à disposição para ajudá-lo novamente.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "n2-enviarimagem",
+          "comando": "enviarimagem",
+          "categoria": "orientacoes",
+          "tipo": "imagem",
+          "arquivoImagem": "assets/mensagens/enviarimagem.png",
+          "variacaoHorario": false,
+          "mensagem": "",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "n2-ocorrencia",
+          "comando": "ocorrencia",
+          "categoria": "orientacoes",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Identificamos uma ocorrência na região e já temos uma equipe técnica atuando para realizar a correção.\n\nA previsão é que a situação seja normalizada em até 4 horas.\n\nAgradecemos pela compreensão durante esse período.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        }
+      ]
+    },
+    "sac": {
+      "version": 3,
+      "legacyNativeIds": [],
+      "messages": [
+        {
+          "id": "sac-enviarimagem",
+          "comando": "enviarimagem",
+          "categoria": "orientacoes",
+          "tipo": "imagem",
+          "arquivoImagem": "assets/mensagens/enviarimagem.png",
+          "variacaoHorario": false,
+          "mensagem": "",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        },
+        {
+          "id": "sac-ocorrencia",
+          "comando": "ocorrencia",
+          "categoria": "orientacoes",
+          "tipo": "texto",
+          "variacaoHorario": false,
+          "mensagem": "Identificamos uma ocorrência na região e já temos uma equipe técnica atuando para realizar a correção.\n\nA previsão é que a situação seja normalizada em até 4 horas.\n\nAgradecemos pela compreensão durante esse período.",
+          "manha": "",
+          "tarde": "",
+          "noite": "",
+          "templateVisita": ""
+        }
+      ]
+    }
+  }
+});
+
+  globalThis.WAY_TOOLS_MESSAGE_CATALOG = catalog;
+  globalThis.WAY_TOOLS_MESSAGE_CATEGORIES = catalog.categories;
+  globalThis.WAY_TOOLS_NATIVE_CATALOGS = catalog.profiles;
+  globalThis.WAY_TOOLS_NATIVE_MESSAGES = catalog.profiles.n2.messages;
 })();
